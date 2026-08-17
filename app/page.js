@@ -1,10 +1,6 @@
 "use client";
 import {useEffect,useState} from "react";
 
-/* ──────────────────────────────────────────────────────────────────
-   SYLLABUS TREE — subjects → topics → subtopics
-   Each leaf is a tag key: "Subject|Topic|Subtopic"
-   ────────────────────────────────────────────────────────────────── */
 const TREE=[
 {s:"Indian Polity & Constitution",topics:[
  {t:"Constitutional Framework",sub:["Basic Structure","Preamble","Fundamental Rights","DPSP","Fundamental Duties","Amendments"]},
@@ -95,7 +91,6 @@ const TREE=[
 ]},
 ];
 
-/* Flatten for quick lookups */
 const ALL_SUBJECTS=TREE.map(x=>x.s);
 function tagKey(s,t,st){return st?`${s}|${t}|${st}`:`${s}|${t}`}
 
@@ -105,50 +100,43 @@ async function safeJson(r){const raw=await r.text();let d;try{d=JSON.parse(raw)}
 export default function Home(){
 const[q,setQ]=useState([]),[text,setText]=useState(""),[busy,setBusy]=useState(false),[msg,setMsg]=useState(""),[settings,setSettings]=useState(defaults),[showSettings,setShowSettings]=useState(false),[search,setSearch]=useState(""),[subject,setSubject]=useState("All"),[test,setTest]=useState(null),[pos,setPos]=useState(0),[picked,setPicked]=useState(null),[score,setScore]=useState(0),[selected,setSelected]=useState(new Set()),[editing,setEditing]=useState(null),[attempting,setAttempting]=useState(null),[attemptPick,setAttemptPick]=useState(null),[attemptReveal,setAttemptReveal]=useState(false);
 
-/* ── Dashboard state ── */
-const[view,setView]=useState("bank"); /* "bank" | "dashboard" */
-const[dashSel,setDashSel]=useState(new Set()); /* selected tag keys */
+const[view,setView]=useState("bank");
+const[dashSel,setDashSel]=useState(new Set());
 const[expandedSubj,setExpandedSubj]=useState(new Set([ALL_SUBJECTS[0]]));
 const[expandedTopic,setExpandedTopic]=useState(new Set());
-const[attempts,setAttempts]=useState({}); /* {tagKey: {correct, total}} */
+const[attempts,setAttempts]=useState({});
 
-/* ── Load from localStorage ── */
 useEffect(()=>{try{
   const s=localStorage.getItem("adaptive-settings"),b=localStorage.getItem("adaptive-bank"),a=localStorage.getItem("adaptive-attempts");
   if(s)setSettings({...defaults,...JSON.parse(s)});if(b)setQ(JSON.parse(b));if(a)setAttempts(JSON.parse(a))
 }catch{}},[]);
 
-/* ── Persist ── */
 useEffect(()=>{localStorage.setItem("adaptive-bank",JSON.stringify(q))},[q]);
 useEffect(()=>{localStorage.setItem("adaptive-attempts",JSON.stringify(attempts))},[attempts]);
 
-/* ── Attempt tracking ── */
 function recordAttempt(question,correct){
   if(!question.subject)return;
   const keys=new Set();
   if(question.subject)keys.add(tagKey(question.subject,question.topic,question.subtopic));
   if(question.subject&&question.topic)keys.add(tagKey(question.subject,question.topic,null));
   keys.forEach(k=>{
-    const cur=attempts[k]||{correct:0,total:0};
-    setAttempts(prev=>({...prev,[k]:{correct:cur.correct+(correct?1:0),total:cur.total+1}}));
+    setAttempts(prev=>{const cur=prev[k]||{correct:0,total:0};return{...prev,[k]:{correct:cur.correct+(correct?1:0),total:cur.total+1}}});
   });
 }
 function acc(k){const a=attempts[k];if(!a||a.total===0)return null;return a.correct/a.total}
 function colorForTag(k){
   const a=acc(k);
-  if(a===null)return"white";     /* not attempted */
-  if(a<0.2)return"red";         /* under 20% */
-  if(a<0.5)return"yellow";      /* 20-50% */
-  if(a<0.8)return"green";       /* 50-80% */
-  return"blue";                 /* near-perfect 80%+ */
+  if(a===null)return"white";
+  if(a<0.2)return"red";
+  if(a<0.5)return"yellow";
+  if(a<0.8)return"green";
+  return"blue";
 }
 const TAG_STYLE={white:{background:"#fff",color:"#172033",border:"1px solid #ccd4df"},red:{background:"#fff1f1",color:"#c33",border:"1px solid #c33"},yellow:{background:"#fffdf0",color:"#b8860b",border:"1px solid #e0c040"},green:{background:"#effaf1",color:"#1a7a32",border:"1px solid #238636"},blue:{background:"#e8f0ff",color:"#1a4fa0",border:"1px solid #3b6fd4"}};
 
-/* ── Dashboard expand/collapse ── */
 function toggleSubj(s){setExpandedSubj(p=>{const n=new Set(p);if(n.has(s))n.delete(s);else n.add(s);return n})}
 function toggleTopic(t){setExpandedTopic(p=>{const n=new Set(p);if(n.has(t))n.delete(t);else n.add(t);return n})}
 
-/* ── Dashboard selection ── */
 function toggleDashTag(key){
   setDashSel(p=>{const n=new Set(p);if(n.has(key))n.delete(key);else n.add(key);return n});
 }
@@ -166,7 +154,6 @@ function selectAllSubj(s){
   setDashSel(keys);
 }
 
-/* ── Build test from dashboard selection ── */
 function startDashTest(){
   if(!dashSel.size){setMsg("Select topics from the dashboard first.");return}
   const pool=q.filter(x=>{
@@ -180,7 +167,6 @@ function startDashTest(){
   setTest(a);setPos(0);setPicked(null);setScore(0);setView("bank");
 }
 
-/* ── Parse pasted text into questions ── */
 async function process(){
   if(!text.trim()){setMsg("Paste extracted question-paper text first.");return}
   setBusy(true);setMsg("Extracting questions…");
@@ -193,7 +179,6 @@ async function process(){
   }catch(e){setMsg(e.message)}finally{setBusy(false)}
 }
 
-/* ── AI labeling — one question at a time ── */
 async function tagOne(question){
   const r=await fetch("/api/tag",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({questions:[question],batchSize:1,...settings})}),d=await safeJson(r);
   if(!r.ok)throw Error(d.error||"AI labeling failed");
@@ -220,24 +205,20 @@ async function tagSelected(){
   setMsg(`Labeled ${targets.length} selected questions.`);setSelected(new Set());setBusy(false)
 }
 
-/* ── Selection helpers (question bank) ── */
 function toggleSel(id){setSelected(s=>{const n=new Set(s);if(n.has(id))n.delete(id);else n.add(id);return n})}
 function toggleAll(){if(selected.size===filtered.length)setSelected(new Set());else setSelected(new Set(filtered.map(x=>x.id)))}
 
-/* ── Manual label / edit / delete ── */
 function manualLabel(id,field,val){setQ(q.map(x=>x.id===id?{...x,[field]:val}:x))}
 function editQ(id,field,val){setQ(q.map(x=>x.id===id?{...x,[field]:val}:x))}
 function editOption(id,idx,val){setQ(q.map(x=>{if(x.id!==id)return x;const opts=[...(x.options||[])];opts[idx]=val;return{...x,options:opts}}))}
 function deleteQ(id){setQ(q.filter(x=>x.id!==id));if(editing===id)setEditing(null);if(attempting===id)setAttempting(null)}
 
-/* ── Inline attempt (practice a single question) ── */
 function startAttempt(id){setAttempting(id);setAttemptPick(null);setAttemptReveal(false)}
 function attemptAnswer(i){if(attemptReveal)return;setAttemptPick(i);setAttemptReveal(true);
   const x=q.find(qq=>qq.id===attempting);
   if(x&&x.answer!=null)recordAttempt(x,x.answer===i);
 }
 
-/* ── Full test mode ── */
 const filtered=q.filter(x=>(subject==="All"||x.subject===subject)&&(x.text||"").toLowerCase().includes(search.toLowerCase()));
 function startTest(){const a=[...filtered].sort(()=>Math.random()-0.5).slice(0,20);if(a.length){setTest(a);setPos(0);setPicked(null);setScore(0)}}
 function answer(i){if(picked!==null)return;setPicked(i);if(test[pos].answer!=null&&test[pos].answer===i)setScore(s=>s+1)}
@@ -249,9 +230,6 @@ function next(){
 }
 function save(){localStorage.setItem("adaptive-settings",JSON.stringify(settings));setShowSettings(false);setMsg("Settings saved.")}
 
-/* ══════════════════════════════════════════════════════════════════
-   TEST MODE RENDER
-   ══════════════════════════════════════════════════════════════════ */
 if(test)return (
 <main style={S.page}><header style={S.header}>
 <button style={S.brand} onClick={()=>{setTest(null)}}>Adaptive Syllabus</button>
@@ -267,9 +245,6 @@ if(test)return (
 </section></main>
 );
 
-/* ══════════════════════════════════════════════════════════════════
-   MAIN RENDER (Bank or Dashboard)
-   ══════════════════════════════════════════════════════════════════ */
 return (
 <main style={S.page}>
 <header style={S.header}>
@@ -282,7 +257,6 @@ return (
 </header>
 
 {view==="dashboard"?(
-/* ══════════ DASHBOARD VIEW ══════════ */
 <section style={S.wrap}>
 <div style={S.dashHero}>
 <div>
@@ -298,16 +272,14 @@ return (
 
 {msg&&<div style={S.msg}>{msg}</div>}
 
-{/* Legend */}
 <div style={S.legend}>
 <span style={{...S.tagPill,...TAG_STYLE.white}}>Not attempted</span>
-<span style={{...S.tagPill,...TAG_STYLE.red}}>< 20%</span>
+<span style={{...S.tagPill,...TAG_STYLE.red}}>{"< 20%"}</span>
 <span style={{...S.tagPill,...TAG_STYLE.yellow}}>20-50%</span>
 <span style={{...S.tagPill,...TAG_STYLE.green}}>50-80%</span>
 <span style={{...S.tagPill,...TAG_STYLE.blue}}>80%+</span>
 </div>
 
-{/* Tree */}
 <div style={S.treeWrap}>
 {TREE.map(subj=>{
   const isExp=expandedSubj.has(subj.s);
@@ -361,9 +333,7 @@ return (
 </div>
 </section>
 ):(
-/* ══════════ QUESTION BANK VIEW ══════════ */
 <section style={S.wrap}>
-{/* Hero */}
 <div style={S.heroo}><div>
 <small>PERSONAL RAS QUESTION BANK</small>
 <h1>Paste extracted text. Let AI do the rest.</h1>
@@ -371,12 +341,10 @@ return (
 </div>
 <div style={S.stat}><b>{q.length}</b><span>questions saved locally</span></div></div>
 
-{/* Text input panel */}
 <div style={S.panel}><textarea style={S.textarea} placeholder={`? First question…\n1. Option\n2. Option\n3. Option\n4. Option\n\n? Second question…`} value={text} onChange={e=>setText(e.target.value)}/>
 <div style={S.textbar}><span>{text.length.toLocaleString()} characters</span>
 <button style={S.primary} onClick={process} disabled={busy||!text.trim()}>{busy?"Processing…":"Extract questions ⇉"}</button></div></div>
 
-{/* Controls */}
 <div style={S.controls}>
 <input placeholder="Search questions" value={search} onChange={e=>setSearch(e.target.value)} style={S.input}/>
 <select value={subject} onChange={e=>setSubject(e.target.value)} style={S.select}><option>All</option>{ALL_SUBJECTS.map(s=><option key={s}>{s}</option>)}</select>
@@ -388,14 +356,12 @@ return (
 
 {msg&&<div style={S.msg}>{msg}</div>}
 
-{/* Question cards */}
 {filtered.map((x,i)=>(
 <article style={S.card} key={x.id}>
 <input type="checkbox" checked={selected.has(x.id)} onChange={()=>toggleSel(x.id)} style={S.chk}/>
 <b>Q{i+1}</b>
 <div>
 {editing===x.id?(
-/* Full edit mode */
 <div style={S.editor}>
 <textarea placeholder="Question text" value={x.text||""} onChange={e=>editQ(x.id,"text",e.target.value)} style={S.editarea}/>
 {(x.options||[]).map((o,j)=>(
@@ -418,7 +384,6 @@ return (
 </div>
 </div>
 ):attempting===x.id?(
-/* Inline attempt mode */
 <div>
 <strong>{x.text}</strong>
 {(x.options||[]).map((o,j)=>(
@@ -431,7 +396,6 @@ return (
 <button style={S.editbtn} onClick={()=>setAttempting(null)}>← Back</button>
 </div>
 ):(
-/* Default view */
 <div>
 <strong>{x.text}</strong>
 {x.options?.length>0&&<ol type="A">{x.options.map((o,j)=><li key={j}>{o}</li>)}</ol>}
@@ -447,7 +411,6 @@ return (
 </section>
 )}
 
-{/* Settings modal */}
 {showSettings&&<div style={S.modal}><div style={S.box}>
 <button style={S.close} onClick={()=>setShowSettings(false)}>×</button>
 <h2>AI Settings</h2><p>Enter your Sarvam endpoint, key and model.</p>
@@ -503,7 +466,6 @@ review:{margin:"6px 0",color:"#5b6471"},
 modal:{position:"fixed",inset:0,background:"#0008",display:"grid",placeItems:"center",padding:20},
 box:{background:"#fff",borderRadius:18,padding:28,width:"min(560px,100%)"},
 close:{float:"right",border:0,background:"none",fontSize:28,cursor:"pointer"},
-/* Dashboard styles */
 treeWrap:{display:"flex",flexDirection:"column",gap:0},
 treeSubj:{borderBottom:"1px solid #e2e7ef"},
 treeRow:{display:"flex",alignItems:"center",gap:8,padding:"10px 0",cursor:"pointer"},
