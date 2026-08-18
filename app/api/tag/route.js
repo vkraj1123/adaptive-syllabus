@@ -1,10 +1,119 @@
-import {NextResponse} from "next/server";
-export const maxDuration=60;export const dynamic="force-dynamic";
-const syllabus=["Indian Polity & Constitution","Indian History & Culture","Rajasthan History & Culture","Indian Geography","Rajasthan Geography","Indian Economy","Rajasthan Economy","Science & Technology","Environment & Ecology","Current Affairs","Reasoning & Mental Ability","Public Administration","Ethics & Integrity","International Relations","Social Issues & Schemes"];
-function heuristicTag(t){t=t.toLowerCase();const rules=[[/constitution|article |fundamental right|parliament|supreme court|federal|panchayat|election commission/,"Indian Polity & Constitution"],[/rajasthan|marwar|mewar|jaipur|rajput|lok devta|fort|folk/,"Rajasthan History & Culture"],[/monsoon|river|plateau|soil|mineral|climate|population|latitude|longitude/,"Indian Geography"],[/gdp|inflation|fiscal|monetary|budget|banking|gst|unemployment/,"Indian Economy"],[/atom|quantum|semiconductor|ai |artificial intelligence|biotech|satellite|space|5g|6g|telecom/,"Science & Technology"],[/biodiversity|pollution|climate change|wetland|forest|ecosystem|carbon|environment/,"Environment & Ecology"],[/un|nato|brics|g20|foreign policy|international|bilateral|geopolit/,"International Relations"],[/ethic|integrity|probity|attitude|empathy|civil service/,"Ethics & Integrity"],[/administration|governance|bureaucracy|district collector|public policy|accountability/,"Public Administration"],[/scheme|yojana|welfare|health|education|women|child|poverty|social justice/,"Social Issues & Schemes"]];for(const[r,x]of rules)if(r.test(t))return x;return"Current Affairs"}
-async function readResponse(r){const text=await r.text();let d=null;try{d=JSON.parse(text)}catch{if(!r.ok)throw Error(text.slice(0,500)||`AI request failed (${r.status})`);throw Error("AI returned a non-JSON response. Check the API Link and model endpoint in Settings.")}if(!r.ok)throw Error(d?.error?.message||d?.message||d?.error||`AI request failed (${r.status})`);return d}
-function extractJson(raw){let s=String(raw||"").trim().replace(/<think>[\s\S]*?<\/think>/gi,"").replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/i,"").trim();try{return JSON.parse(s)}catch{}const starts=[s.indexOf("{"),s.indexOf("[")].filter(x=>x>=0).sort((a,b)=>a-b);for(const start of starts){for(let end=s.length;end>start;end--){try{return JSON.parse(s.slice(start,end).trim())}catch{}}}return null}
-function normalize(parsed,input){const arr=Array.isArray(parsed)?parsed:(parsed?.questions||parsed?.data||parsed?.results||[]);return arr.map((x,i)=>({...x,id:x.id??input[i]?.id??i+1,text:x.text??input[i]?.text??""})).filter(x=>x.text)}
-async function oneBatch(apiKey,model,apiUrl,questions){const prompt=`Classify these RAS questions. Choose exactly ONE subject from: ${syllabus.join(" | ")}. Return topic, subtopic, difficulty (Easy/Moderate/Hard), confidence 0-1. Return ONLY compact JSON with no prose: {"questions":[{"id":1,"subject":"...","topic":"...","subtopic":"...","difficulty":"Moderate","confidence":0.9}]}. Preserve every id.\n${questions.map(q=>JSON.stringify({id:q.id,text:q.text})).join("\n")}`;const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),45000);const r=await fetch(apiUrl.trim(),{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${apiKey}`,"api-subscription-key":apiKey},body:JSON.stringify({model,messages:[{role:"system",content:"JSON only. No markdown. No explanation."},{role:"user",content:prompt}],temperature:0,max_tokens:4096}),signal:ctrl.signal});clearTimeout(timer);const d=await readResponse(r);let c=d?.choices?.[0]?.message?.content;if(Array.isArray(c))c=c.map(x=>x?.text||x?.content||"").join("");const parsed=extractJson(c);if(!parsed)throw Error("AI returned incomplete/non-JSON labeling output.");return normalize(parsed,questions)}
-async function labelResilient(apiKey,model,apiUrl,questions){if(!questions.length)return[];try{const result=await oneBatch(apiKey,model,apiUrl,questions);if(result.length>=questions.length)return result;throw Error("Incomplete batch") }catch(e){if(questions.length===1)return [{...questions[0],subject:heuristicTag(questions[0].text||""),topic:"AI response unavailable",subtopic:"Review",difficulty:"Unknown",confidence:0}];const mid=Math.ceil(questions.length/2);return [...await labelResilient(apiKey,model,apiUrl,questions.slice(0,mid)),...await labelResilient(apiKey,model,apiUrl,questions.slice(mid))]}}
-export async function POST(request){try{const{questions=[],apiKey,model="sarvam-105b",apiUrl="",batchSize=3}=await request.json();const cleaned=questions.slice(0,100);if(!cleaned.length)return NextResponse.json({questions:[]});if(!apiKey)return NextResponse.json({mode:"fallback",questions:cleaned.map((q,i)=>({...q,subject:heuristicTag(q.text||""),topic:"Rule-based suggestion",subtopic:"Review tag",difficulty:"Unknown",confidence:.55}))});if(!apiUrl?.trim())throw Error("Add the AI API link in Settings.");const results=[];const n=Math.max(1,Math.min(5,Number(batchSize)||6));for(let i=0;i<cleaned.length;i+=n){const batch=cleaned.slice(i,i+n);const labeled=await labelResilient(apiKey,model,apiUrl,batch);const byId=new Map(labeled.map(x=>[String(x.id),x]));batch.forEach((q,j)=>results.push({...q,...(byId.get(String(q.id))||labeled[j]||{})}))}return NextResponse.json({mode:"ai",questions:results})}catch(e){return NextResponse.json({error:e.message},{status:500})}}
+import { NextResponse } from "next/server";
+
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
+const syllabus = [
+  "Indian Polity & Constitution", "Indian History & Culture", "Rajasthan History & Culture", "Indian Geography", "Rajasthan Geography",
+  "Indian Economy", "Rajasthan Economy", "Science & Technology", "Environment & Ecology", "Current Affairs",
+  "Reasoning & Mental Ability", "Public Administration", "Ethics & Integrity", "International Relations", "Social Issues & Schemes"
+];
+
+function heuristicTag(t) {
+  t = String(t || "").toLowerCase();
+  const rules = [
+    [/constitution|article |fundamental right|parliament|supreme court|federal|panchayat|election commission/, "Indian Polity & Constitution"],
+    [/rajasthan|marwar|mewar|jaipur|rajput|lok devta|fort|folk/, "Rajasthan History & Culture"],
+    [/monsoon|river|plateau|soil|mineral|climate|population|latitude|longitude/, "Indian Geography"],
+    [/gdp|inflation|fiscal|monetary|budget|banking|gst|unemployment/, "Indian Economy"],
+    [/atom|quantum|semiconductor|ai |artificial intelligence|biotech|satellite|space|5g|6g|telecom/, "Science & Technology"],
+    [/biodiversity|pollution|climate change|wetland|forest|ecosystem|carbon|environment/, "Environment & Ecology"],
+    [/un|nato|brics|g20|foreign policy|international|bilateral|geopolit/, "International Relations"],
+    [/ethic|integrity|probity|attitude|empathy|civil service/, "Ethics & Integrity"],
+    [/administration|governance|bureaucracy|district collector|public policy|accountability/, "Public Administration"],
+    [/scheme|yojana|welfare|health|education|women|child|poverty|social justice/, "Social Issues & Schemes"]
+  ];
+  for (const [r, x] of rules) if (r.test(t)) return x;
+  return "Current Affairs";
+}
+
+async function readResponse(r) {
+  const text = await r.text();
+  let d = null;
+  try { d = JSON.parse(text); } catch {
+    if (!r.ok) throw Error(text.slice(0, 500) || `AI request failed (${r.status})`);
+    throw Error("AI returned a non-JSON response. Check the API Link and model endpoint in Settings.");
+  }
+  if (!r.ok) throw Error(d?.error?.message || d?.message || d?.error || `AI request failed (${r.status})`);
+  return d;
+}
+
+function contentFromMessage(message) {
+  const content = message?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) return content.map(x => x?.text || x?.content || "").join("");
+  return "";
+}
+
+function extractJson(raw) {
+  let s = String(raw || "").trim().replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  try { return JSON.parse(s); } catch {}
+  const starts = [s.indexOf("{"), s.indexOf("[")].filter(x => x >= 0).sort((a, b) => a - b);
+  for (const start of starts) {
+    for (let end = s.length; end > start; end--) {
+      try { return JSON.parse(s.slice(start, end).trim()); } catch {}
+    }
+  }
+  return null;
+}
+
+function normalize(parsed, input) {
+  const arr = Array.isArray(parsed) ? parsed : (parsed?.questions || parsed?.data || parsed?.results || []);
+  return arr.map((x, i) => ({ ...x, id: x.id ?? input[i]?.id ?? i + 1, text: x.text ?? input[i]?.text ?? "" })).filter(x => x.text);
+}
+
+async function oneBatch(apiKey, model, apiUrl, questions) {
+  const prompt = `Classify these RAS questions. Choose exactly ONE subject from: ${syllabus.join(" | ")}. Return topic, subtopic, difficulty (Easy/Moderate/Hard), confidence 0-1. Return ONLY compact JSON with no prose: {"questions":[{"id":1,"subject":"...","topic":"...","subtopic":"...","difficulty":"Moderate","confidence":0.9}]}. Preserve every id.\n${questions.map(q => JSON.stringify({ id: q.id, text: q.text })).join("\n")}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 45000);
+  try {
+    const r = await fetch(apiUrl.trim(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, "api-subscription-key": apiKey },
+      body: JSON.stringify({ model, messages: [{ role: "system", content: "JSON only. No markdown. No explanation." }, { role: "user", content: prompt }], temperature: 0, max_tokens: 4096 }),
+      signal: ctrl.signal
+    });
+    const d = await readResponse(r);
+    const c = contentFromMessage(d?.choices?.[0]?.message) || d?.output_text || "";
+    const parsed = extractJson(c);
+    if (!parsed) throw Error("AI returned incomplete/non-JSON labeling output.");
+    return normalize(parsed, questions);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function labelResilient(apiKey, model, apiUrl, questions) {
+  if (!questions.length) return [];
+  try {
+    const result = await oneBatch(apiKey, model, apiUrl, questions);
+    if (result.length >= questions.length) return result;
+    throw Error("Incomplete batch");
+  } catch (e) {
+    if (questions.length === 1) return [{ ...questions[0], subject: heuristicTag(questions[0].text || ""), topic: "AI response unavailable", subtopic: "Review", difficulty: "Unknown", confidence: 0 }];
+    const mid = Math.ceil(questions.length / 2);
+    return [...await labelResilient(apiKey, model, apiUrl, questions.slice(0, mid)), ...await labelResilient(apiKey, model, apiUrl, questions.slice(mid))];
+  }
+}
+
+export async function POST(request) {
+  try {
+    const { questions = [], apiKey, model = "sarvam-105b", apiUrl = "", batchSize = 3 } = await request.json();
+    const cleaned = Array.isArray(questions) ? questions.slice(0, 100) : [];
+    if (!cleaned.length) return NextResponse.json({ questions: [] });
+    if (!apiKey) return NextResponse.json({ mode: "fallback", questions: cleaned.map(q => ({ ...q, subject: heuristicTag(q.text || ""), topic: "Rule-based suggestion", subtopic: "Review tag", difficulty: "Unknown", confidence: 0.55 })) });
+    if (!apiUrl?.trim()) throw Error("Add the AI API link in Settings.");
+
+    const results = [];
+    const n = Math.max(1, Math.min(5, Number(batchSize) || 3));
+    for (let i = 0; i < cleaned.length; i += n) {
+      const batch = cleaned.slice(i, i + n);
+      const labeled = await labelResilient(apiKey, model, apiUrl, batch);
+      const byId = new Map(labeled.map(x => [String(x.id), x]));
+      batch.forEach((q, j) => results.push({ ...q, ...(byId.get(String(q.id)) || labeled[j] || {}) }));
+    }
+    return NextResponse.json({ mode: "ai", questions: results });
+  } catch (e) {
+    return NextResponse.json({ error: e?.name === "AbortError" ? "AI labeling timed out." : e.message }, { status: 500 });
+  }
+}
