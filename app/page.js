@@ -93,27 +93,30 @@ const TREE=[
 
 const ALL_SUBJECTS=TREE.map(x=>x.s);
 function tagKey(s,t,st){return st?`${s}|${t}|${st}`:`${s}|${t}`}
-
 const defaults={model:"sarvam-105b",apiUrl:"",apiKey:""};
 async function safeJson(r){const raw=await r.text();let d;try{d=JSON.parse(raw)}catch{throw Error(raw?.slice(0,800)||`Server returned non-JSON response (${r.status})`)}return d}
 
 export default function Home(){
 const[q,setQ]=useState([]),[text,setText]=useState(""),[busy,setBusy]=useState(false),[msg,setMsg]=useState(""),[settings,setSettings]=useState(defaults),[showSettings,setShowSettings]=useState(false),[search,setSearch]=useState(""),[subject,setSubject]=useState("All"),[test,setTest]=useState(null),[pos,setPos]=useState(0),[picked,setPicked]=useState(null),[score,setScore]=useState(0),[selected,setSelected]=useState(new Set()),[editing,setEditing]=useState(null),[attempting,setAttempting]=useState(null),[attemptPick,setAttemptPick]=useState(null),[attemptReveal,setAttemptReveal]=useState(false);
 
+/* Dashboard state */
 const[view,setView]=useState("bank");
 const[dashSel,setDashSel]=useState(new Set());
 const[expandedSubj,setExpandedSubj]=useState(new Set([ALL_SUBJECTS[0]]));
 const[expandedTopic,setExpandedTopic]=useState(new Set());
 const[attempts,setAttempts]=useState({});
+const[dashSort,setDashSort]=useState("name"); /* name | acc-asc | acc-desc | attempts */
+const[explanation,setExplanation]=useState(null); /* {text, loading} */
+const[testExplanation,setTestExplanation]=useState(null);
 
 useEffect(()=>{try{
   const s=localStorage.getItem("adaptive-settings"),b=localStorage.getItem("adaptive-bank"),a=localStorage.getItem("adaptive-attempts");
   if(s)setSettings({...defaults,...JSON.parse(s)});if(b)setQ(JSON.parse(b));if(a)setAttempts(JSON.parse(a))
 }catch{}},[]);
-
 useEffect(()=>{localStorage.setItem("adaptive-bank",JSON.stringify(q))},[q]);
 useEffect(()=>{localStorage.setItem("adaptive-attempts",JSON.stringify(attempts))},[attempts]);
 
+/* Attempt tracking */
 function recordAttempt(question,correct){
   if(!question.subject)return;
   const keys=new Set();
@@ -134,39 +137,101 @@ function colorForTag(k){
 }
 const TAG_STYLE={white:{background:"#fff",color:"#172033",border:"1px solid #ccd4df"},red:{background:"#fff1f1",color:"#c33",border:"1px solid #c33"},yellow:{background:"#fffdf0",color:"#b8860b",border:"1px solid #e0c040"},green:{background:"#effaf1",color:"#1a7a32",border:"1px solid #238636"},blue:{background:"#e8f0ff",color:"#1a4fa0",border:"1px solid #3b6fd4"}};
 
+/* Sort subtopics */
+function sortSubs(subjS,tp,subs){
+  if(dashSort==="name")return subs;
+  const arr=[...subs];
+  if(dashSort==="acc-asc")arr.sort((a,b)=>{const ka=tagKey(subjS,tp,a),kb=tagKey(subjS,tp,b);const aa=acc(ka)??2,ab=acc(kb)??2;return aa-ab});
+  else if(dashSort==="acc-desc")arr.sort((a,b)=>{const ka=tagKey(subjS,tp,a),kb=tagKey(subjS,tp,b);const aa=acc(ka)??-1,ab=acc(kb)??-1;return ab-aa});
+  else if(dashSort==="attempts")arr.sort((a,b)=>{const ka=tagKey(subjS,tp,a),kb=tagKey(subjS,tp,b);const ta=attempts[ka]?.total||0,tb=attempts[kb]?.total||0;return tb-ta});
+  return arr;
+}
+/* Sort topics within a subject */
+function sortTopics(subjS,topics){
+  if(dashSort==="name")return topics;
+  const arr=[...topics];
+  if(dashSort==="acc-asc")arr.sort((a,b)=>{const ka=tagKey(subjS,a.t,null),kb=tagKey(subjS,b.t,null);const aa=acc(ka)??2,ab=acc(kb)??2;return aa-ab});
+  else if(dashSort==="acc-desc")arr.sort((a,b)=>{const ka=tagKey(subjS,a.t,null),kb=tagKey(subjS,b.t,null);const aa=acc(ka)??-1,ab=acc(kb)??-1;return ab-aa});
+  else if(dashSort==="attempts")arr.sort((a,b)=>{const ka=tagKey(subjS,a.t,null),kb=tagKey(subjS,b.t,null);const ta=attempts[ka]?.total||0,tb=attempts[kb]?.total||0;return tb-ta});
+  return arr;
+}
+/* Sort subjects */
+function sortSubjects(subjects){
+  if(dashSort==="name")return subjects;
+  const arr=[...subjects];
+  const subjAcc=s=>{let tc=0,tt=0;s.topics.forEach(tp=>{const k=tagKey(s.s,tp.t,null);if(attempts[k]){tc+=attempts[k].correct;tt+=attempts[k].total}tp.sub.forEach(st=>{const k2=tagKey(s.s,tp.t,st);if(attempts[k2]){tc+=attempts[k2].correct;tt+=attempts[k2].total}})});return tt>0?tc/tt:null};
+  if(dashSort==="acc-asc")arr.sort((a,b)=>{const aa=subjAcc(a)??2,ab=subjAcc(b)??2;return aa-ab});
+  else if(dashSort==="acc-desc")arr.sort((a,b)=>{const aa=subjAcc(a)??-1,ab=subjAcc(b)??-1;return ab-aa});
+  else if(dashSort==="attempts")arr.sort((a,b)=>{let ta=0,tb=0;a.topics.forEach(tp=>{ta+=(attempts[tagKey(a.s,tp.t,null)]?.total||0);tp.sub.forEach(st=>ta+=(attempts[tagKey(a.s,tp.t,st)]?.total||0))});b.topics.forEach(tp=>{tb+=(attempts[tagKey(b.s,tp.t,null)]?.total||0);tp.sub.forEach(st=>tb+=(attempts[tagKey(b.s,tp.t,st)]?.total||0))});return tb-ta});
+  return arr;
+}
+
+/* Dashboard expand/collapse */
 function toggleSubj(s){setExpandedSubj(p=>{const n=new Set(p);if(n.has(s))n.delete(s);else n.add(s);return n})}
 function toggleTopic(t){setExpandedTopic(p=>{const n=new Set(p);if(n.has(t))n.delete(t);else n.add(t);return n})}
 
-function toggleDashTag(key){
-  setDashSel(p=>{const n=new Set(p);if(n.has(key))n.delete(key);else n.add(key);return n});
-}
+/* Dashboard selection */
+function toggleDashTag(key){setDashSel(p=>{const n=new Set(p);if(n.has(key))n.delete(key);else n.add(key);return n})}
 function selectAllSubj(s){
   const subj=TREE.find(x=>x.s===s);if(!subj)return;
   const keys=new Set(dashSel);
   let allSelected=true;
-  for(const tp of subj.topics){
-    const tk=tagKey(s,tp.t,null);
-    if(!keys.has(tk))allSelected=false;
-    for(const st of tp.sub){const k=tagKey(s,tp.t,st);if(!keys.has(k))allSelected=false}
-  }
+  for(const tp of subj.topics){const tk=tagKey(s,tp.t,null);if(!keys.has(tk))allSelected=false;for(const st of tp.sub){const k=tagKey(s,tp.t,st);if(!keys.has(k))allSelected=false}}
   if(allSelected){for(const tp of subj.topics){keys.delete(tagKey(s,tp.t,null));for(const st of tp.sub)keys.delete(tagKey(s,tp.t,st))}}
   else{for(const tp of subj.topics){keys.add(tagKey(s,tp.t,null));for(const st of tp.sub)keys.add(tagKey(s,tp.t,st))}}
   setDashSel(keys);
 }
+function selectWeak(){
+  const keys=new Set();
+  TREE.forEach(subj=>{subj.topics.forEach(tp=>{
+    const tk=tagKey(subj.s,tp.t,null);const ta=acc(tk);
+    if(ta!==null&&ta<0.5)keys.add(tk);
+    tp.sub.forEach(st=>{const k=tagKey(subj.s,tp.t,st);const a=acc(k);if(a!==null&&a<0.5)keys.add(k)});
+  })});
+  if(!keys.size){setMsg("No weak topics found. Attempt some questions first.");return}
+  setDashSel(keys);setMsg(`Selected ${keys.size} weak topics (below 50% accuracy).`);
+  /* expand all subjects that have weak topics */
+  const expSubj=new Set();TREE.forEach(subj=>{subj.topics.forEach(tp=>{const tk=tagKey(subj.s,tp.t,null);const ta=acc(tk);if(ta!==null&&ta<0.5){expSubj.add(subj.s);setExpandedTopic(p=>{const n=new Set(p);n.add(tk);return n})}tp.sub.forEach(st=>{const k=tagKey(subj.s,tp.t,st);const a=acc(k);if(a!==null&&a<0.5){expSubj.add(subj.s);setExpandedTopic(p=>{const n=new Set(p);n.add(tk);return n})}})})});
+  setExpandedSubj(new Set([...expandedSubj,...expSubj]));
+}
+function selectAttempted(){
+  const keys=new Set();
+  TREE.forEach(subj=>{subj.topics.forEach(tp=>{tp.sub.forEach(st=>{const k=tagKey(subj.s,tp.t,st);if(acc(k)!==null)keys.add(k)})})});
+  if(!keys.size){setMsg("No attempted topics found yet.");return}
+  setDashSel(keys);setMsg(`Selected ${keys.size} attempted subtopics.`);
+}
+function clearDashSel(){setDashSel(new Set());setMsg("Selection cleared.")}
+function resetAttempts(){if(confirm("Reset all attempt data? This cannot be undone.")){setAttempts({});setMsg("Attempt data reset.")}}
+
+function expandAll(){setExpandedSubj(new Set(ALL_SUBJECTS));setExpandedTopic(new Set(TREE.flatMap(s=>s.topics.map(tp=>tagKey(s.s,tp.t,null)))))}
+function collapseAll(){setExpandedSubj(new Set());setExpandedTopic(new Set())}
 
 function startDashTest(){
   if(!dashSel.size){setMsg("Select topics from the dashboard first.");return}
-  const pool=q.filter(x=>{
-    if(!x.subject)return false;
-    const k1=tagKey(x.subject,x.topic,x.subtopic);
-    const k2=tagKey(x.subject,x.topic,null);
-    return dashSel.has(k1)||dashSel.has(k2);
-  });
+  const pool=q.filter(x=>{if(!x.subject)return false;const k1=tagKey(x.subject,x.topic,x.subtopic),k2=tagKey(x.subject,x.topic,null);return dashSel.has(k1)||dashSel.has(k2)});
   if(!pool.length){setMsg("No questions match the selected topics. Extract and label questions first.");return}
-  const a=[...pool].sort(()=>Math.random()-0.5).slice(0,20);
-  setTest(a);setPos(0);setPicked(null);setScore(0);setView("bank");
+  const a=[...pool].sort(()=>Math.random()-0.5).slice(0,20);setTest(a);setPos(0);setPicked(null);setScore(0);setView("bank");setTestExplanation(null);
 }
 
+/* AI Explanation */
+async function getExplanation(question){
+  setExplanation({text:"",loading:true});
+  try{
+    const r=await fetch("/api/explain",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question,...settings})}),d=await safeJson(r);
+    if(!r.ok)throw Error(d.error||"Explanation failed");
+    setExplanation({text:d.explanation||"No explanation returned.",loading:false});
+  }catch(e){setExplanation({text:"Error: "+e.message,loading:false})}
+}
+async function getTestExplanation(question){
+  setTestExplanation({text:"",loading:true});
+  try{
+    const r=await fetch("/api/explain",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question,...settings})}),d=await safeJson(r);
+    if(!r.ok)throw Error(d.error||"Explanation failed");
+    setTestExplanation({text:d.explanation||"No explanation returned.",loading:false});
+  }catch(e){setTestExplanation({text:"Error: "+e.message,loading:false})}
+}
+
+/* Parse */
 async function process(){
   if(!text.trim()){setMsg("Paste extracted question-paper text first.");return}
   setBusy(true);setMsg("Extracting questions…");
@@ -179,6 +244,7 @@ async function process(){
   }catch(e){setMsg(e.message)}finally{setBusy(false)}
 }
 
+/* AI labeling — one question at a time */
 async function tagOne(question){
   const r=await fetch("/api/tag",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({questions:[question],batchSize:1,...settings})}),d=await safeJson(r);
   if(!r.ok)throw Error(d.error||"AI labeling failed");
@@ -187,49 +253,38 @@ async function tagOne(question){
 async function tag(){
   const targets=q.length?q:[];if(!targets.length)return;
   setBusy(true);const updated=[...q];
-  for(let i=0;i<targets.length;i++){
-    setMsg(`Labeling Q${i+1} of ${targets.length}…`);
-    try{const labeled=await tagOne(targets[i]);const idx=q.indexOf(targets[i]);if(idx>=0)updated[idx]={...updated[idx],...labeled};setQ([...updated])}
-    catch(e){setMsg(`AI labeling error at Q${i+1}: ${e.message}`);setBusy(false);return}
-  }
+  for(let i=0;i<targets.length;i++){setMsg(`Labeling Q${i+1} of ${targets.length}…`);try{const labeled=await tagOne(targets[i]);const idx=q.indexOf(targets[i]);if(idx>=0)updated[idx]={...updated[idx],...labeled};setQ([...updated])}catch(e){setMsg(`AI labeling error at Q${i+1}: ${e.message}`);setBusy(false);return}}
   setMsg("AI labeling complete.");setBusy(false)
 }
 async function tagSelected(){
   const targets=q.filter(x=>selected.has(x.id));if(!targets.length){setMsg("Select questions first.");return}
   setBusy(true);const updated=[...q];
-  for(let i=0;i<targets.length;i++){
-    setMsg(`Labeling Q${i+1} of ${targets.length}…`);
-    try{const labeled=await tagOne(targets[i]);const idx=q.indexOf(targets[i]);if(idx>=0)updated[idx]={...updated[idx],...labeled};setQ([...updated])}
-    catch(e){setMsg(`AI labeling error at Q${i+1}: ${e.message}`);setBusy(false);return}
-  }
+  for(let i=0;i<targets.length;i++){setMsg(`Labeling Q${i+1} of ${targets.length}…`);try{const labeled=await tagOne(targets[i]);const idx=q.indexOf(targets[i]);if(idx>=0)updated[idx]={...updated[idx],...labeled};setQ([...updated])}catch(e){setMsg(`AI labeling error at Q${i+1}: ${e.message}`);setBusy(false);return}}
   setMsg(`Labeled ${targets.length} selected questions.`);setSelected(new Set());setBusy(false)
 }
 
 function toggleSel(id){setSelected(s=>{const n=new Set(s);if(n.has(id))n.delete(id);else n.add(id);return n})}
 function toggleAll(){if(selected.size===filtered.length)setSelected(new Set());else setSelected(new Set(filtered.map(x=>x.id)))}
-
 function manualLabel(id,field,val){setQ(q.map(x=>x.id===id?{...x,[field]:val}:x))}
 function editQ(id,field,val){setQ(q.map(x=>x.id===id?{...x,[field]:val}:x))}
 function editOption(id,idx,val){setQ(q.map(x=>{if(x.id!==id)return x;const opts=[...(x.options||[])];opts[idx]=val;return{...x,options:opts}}))}
 function deleteQ(id){setQ(q.filter(x=>x.id!==id));if(editing===id)setEditing(null);if(attempting===id)setAttempting(null)}
 
-function startAttempt(id){setAttempting(id);setAttemptPick(null);setAttemptReveal(false)}
+function startAttempt(id){setAttempting(id);setAttemptPick(null);setAttemptReveal(false);setExplanation(null)}
 function attemptAnswer(i){if(attemptReveal)return;setAttemptPick(i);setAttemptReveal(true);
-  const x=q.find(qq=>qq.id===attempting);
-  if(x&&x.answer!=null)recordAttempt(x,x.answer===i);
+  const x=q.find(qq=>qq.id===attempting);if(x&&x.answer!=null)recordAttempt(x,x.answer===i);
 }
 
 const filtered=q.filter(x=>(subject==="All"||x.subject===subject)&&(x.text||"").toLowerCase().includes(search.toLowerCase()));
-function startTest(){const a=[...filtered].sort(()=>Math.random()-0.5).slice(0,20);if(a.length){setTest(a);setPos(0);setPicked(null);setScore(0)}}
+function startTest(){const a=[...filtered].sort(()=>Math.random()-0.5).slice(0,20);if(a.length){setTest(a);setPos(0);setPicked(null);setScore(0);setTestExplanation(null)}}
 function answer(i){if(picked!==null)return;setPicked(i);if(test[pos].answer!=null&&test[pos].answer===i)setScore(s=>s+1)}
 function next(){
-  if(pos+1>=test.length){
-    const graded=test.filter(q=>q.answer!=null).length;
-    alert(`Score: ${score}/${graded}${graded<test.length?` (${test.length-graded} without answer key)`:``}`);setTest(null)
-  }else{setPos(pos+1);setPicked(null)}
+  if(pos+1>=test.length){const graded=test.filter(q=>q.answer!=null).length;alert(`Score: ${score}/${graded}${graded<test.length?` (${test.length-graded} without answer key)`:``}`);setTest(null)}
+  else{setPos(pos+1);setPicked(null);setTestExplanation(null)}
 }
 function save(){localStorage.setItem("adaptive-settings",JSON.stringify(settings));setShowSettings(false);setMsg("Settings saved.")}
 
+/* ─── TEST MODE ─── */
 if(test)return (
 <main style={S.page}><header style={S.header}>
 <button style={S.brand} onClick={()=>{setTest(null)}}>Adaptive Syllabus</button>
@@ -241,10 +296,17 @@ if(test)return (
 <button key={i} onClick={()=>answer(i)} style={{...S.option,...(picked===i?(test[pos].answer==null?S.neutral:(test[pos].answer===i?S.good:S.bad)):{})}}>{String.fromCharCode(65+i)}. {o}</button>
 ))}
 {picked!==null&&<div style={S.review}>{test[pos].answer==null?<small>No answer key for this question.</small>:<small>Correct answer: {String.fromCharCode(65+test[pos].answer)}</small>}</div>}
+{picked!==null&&!testExplanation&&<button style={{...S.primary,marginTop:8}} onClick={()=>getTestExplanation(test[pos])}>💡 Explain this question</button>}
+{testExplanation&&(
+<div style={S.explainBox}>
+{testExplanation.loading?<small>Loading explanation…</small>:<pre style={S.preWrap}>{testExplanation.text}</pre>}
+</div>
+)}
 {picked!==null&&<button style={S.primary} onClick={next}>{pos+1===test.length?"Finish":"Next"}</button>}
 </section></main>
 );
 
+/* ─── MAIN ─── */
 return (
 <main style={S.page}>
 <header style={S.header}>
@@ -257,6 +319,7 @@ return (
 </header>
 
 {view==="dashboard"?(
+/* ══ DASHBOARD ══ */
 <section style={S.wrap}>
 <div style={S.dashHero}>
 <div>
@@ -270,8 +333,25 @@ return (
 </div>
 </div>
 
+{/* Dashboard toolbar */}
+<div style={S.dashToolbar}>
+<select value={dashSort} onChange={e=>setDashSort(e.target.value)} style={S.dashSelect}>
+<option value="name">Sort: A→Z</option>
+<option value="acc-asc">Sort: Accuracy ↑ (worst first)</option>
+<option value="acc-desc">Sort: Accuracy ↓ (best first)</option>
+<option value="attempts">Sort: Most attempted</option>
+</select>
+<button style={S.dashBtn} onClick={selectWeak}>⚠ Select Weak</button>
+<button style={S.dashBtn} onClick={selectAttempted}>✓ Select Attempted</button>
+<button style={S.dashBtn} onClick={expandAll}>⊕ Expand All</button>
+<button style={S.dashBtn} onClick={collapseAll}>⊖ Collapse All</button>
+{dashSel.size>0&&<button style={S.dashBtn} onClick={clearDashSel}>✕ Clear Selection</button>}
+<button style={{...S.dashBtn,color:"#c33"}} onClick={resetAttempts}>↻ Reset Data</button>
+</div>
+
 {msg&&<div style={S.msg}>{msg}</div>}
 
+{/* Legend */}
 <div style={S.legend}>
 <span style={{...S.tagPill,...TAG_STYLE.white}}>Not attempted</span>
 <span style={{...S.tagPill,...TAG_STYLE.red}}>{"< 20%"}</span>
@@ -280,8 +360,9 @@ return (
 <span style={{...S.tagPill,...TAG_STYLE.blue}}>80%+</span>
 </div>
 
+{/* Tree */}
 <div style={S.treeWrap}>
-{TREE.map(subj=>{
+{sortSubjects(TREE).map(subj=>{
   const isExp=expandedSubj.has(subj.s);
   const subjAllSel=isExp&&subj.topics.every(tp=>dashSel.has(tagKey(subj.s,tp.t,null)));
   return (
@@ -290,13 +371,9 @@ return (
       <span style={S.arrow}>{isExp?"▾":"▸"}</span>
       <input type="checkbox" checked={subjAllSel} onClick={e=>e.stopPropagation()} onChange={()=>selectAllSubj(subj.s)} style={S.treeChk}/>
       <b style={{fontSize:15}}>{subj.s}</b>
-      {(()=>{
-        const allKeys=[];subj.topics.forEach(tp=>{allKeys.push(tagKey(subj.s,tp.t,null));tp.sub.forEach(st=>allKeys.push(tagKey(subj.s,tp.t,st)))});
-        const att=allKeys.filter(k=>acc(k)!==null).length;
-        return <small style={{color:"#888"}}>{att}/{allKeys.length} attempted</small>
-      })()}
+      {(()=>{const allKeys=[];subj.topics.forEach(tp=>{allKeys.push(tagKey(subj.s,tp.t,null));tp.sub.forEach(st=>allKeys.push(tagKey(subj.s,tp.t,st)))});const att=allKeys.filter(k=>acc(k)!==null).length;return <small style={{color:"#888"}}>{att}/{allKeys.length} attempted</small>})()}
     </div>
-    {isExp&&subj.topics.map(tp=>{
+    {isExp&&sortTopics(subj.s,subj.topics).map(tp=>{
       const tk=tagKey(subj.s,tp.t,null);
       const tpExp=expandedTopic.has(tk);
       const tpAllSel=dashSel.has(tk)&&tp.sub.every(st=>dashSel.has(tagKey(subj.s,tp.t,st)));
@@ -306,22 +383,12 @@ return (
           <span style={S.arrow}>{tpExp?"▾":"▸"}</span>
           <input type="checkbox" checked={tpAllSel} onClick={e=>e.stopPropagation()} onChange={()=>{const keys=new Set(dashSel);const allSel=dashSel.has(tk)&&tp.sub.every(st=>dashSel.has(tagKey(subj.s,tp.t,st)));if(allSel){keys.delete(tk);tp.sub.forEach(st=>keys.delete(tagKey(subj.s,tp.t,st)))}else{keys.add(tk);tp.sub.forEach(st=>keys.add(tagKey(subj.s,tp.t,st)))}setDashSel(keys)}} style={S.treeChk}/>
           <span style={{fontWeight:600,fontSize:14,color:"#2a3a5a"}}>{tp.t}</span>
-          <span style={{...S.tagPill,...TAG_STYLE[colorForTag(tk)],fontSize:11}}>
-            {acc(tk)===null?"—":`${Math.round(acc(tk)*100)}% (${attempts[tk]?.total||0})`}
-          </span>
+          <span style={{...S.tagPill,...TAG_STYLE[colorForTag(tk)],fontSize:11}}>{acc(tk)===null?"—":`${Math.round(acc(tk)*100)}% (${attempts[tk]?.total||0})`}</span>
         </div>
         {tpExp&&<div style={{paddingLeft:48,display:"flex",gap:6,flexWrap:"wrap",margin:"4px 0 8px"}}>
-          {tp.sub.map(st=>{
-            const k=tagKey(subj.s,tp.t,st);
-            const sel=dashSel.has(k);
-            const c=colorForTag(k);
-            const a=acc(k);
-            return (
-            <span key={k} onClick={()=>toggleDashTag(k)} style={{...S.tagPill,...TAG_STYLE[c],cursor:"pointer",border:sel?"2px solid #172033":TAG_STYLE[c].border,fontWeight:sel?700:400}}>
-              {st}
-              <small style={{opacity:0.7,marginLeft:4}}>{a===null?"":`${Math.round(a*100)}%`}</small>
-            </span>
-            )
+          {sortSubs(subj.s,tp.t,tp.sub).map(st=>{
+            const k=tagKey(subj.s,tp.t,st);const sel=dashSel.has(k);const c=colorForTag(k);const a=acc(k);
+            return <span key={k} onClick={()=>toggleDashTag(k)} style={{...S.tagPill,...TAG_STYLE[c],cursor:"pointer",border:sel?"2px solid #172033":TAG_STYLE[c].border,fontWeight:sel?700:400}}>{st}<small style={{opacity:0.7,marginLeft:4}}>{a===null?"":`${Math.round(a*100)}%`}</small></span>
           })}
         </div>}
       </div>
@@ -333,6 +400,7 @@ return (
 </div>
 </section>
 ):(
+/* ══ QUESTION BANK ══ */
 <section style={S.wrap}>
 <div style={S.heroo}><div>
 <small>PERSONAL RAS QUESTION BANK</small>
@@ -392,7 +460,13 @@ return (
 {attemptReveal&&<div style={S.review}>
 {x.answer==null?<small>No answer key for this question.</small>:attemptPick===x.answer?<small style={{color:"#238636",fontWeight:700}}>✓ Correct!</small>:<small style={{color:"#c33",fontWeight:700}}>✗ Wrong. Correct answer: {String.fromCharCode(65+x.answer)}</small>}
 </div>}
-{attemptReveal&&<button style={S.editbtn} onClick={()=>{setAttemptPick(null);setAttemptReveal(false)}}>Retry</button>}
+{attemptReveal&&!explanation&&<button style={{...S.primary,marginTop:8}} onClick={()=>getExplanation(x)}>💡 Explain this question</button>}
+{explanation&&(
+<div style={S.explainBox}>
+{explanation.loading?<small>Loading explanation…</small>:<pre style={S.preWrap}>{explanation.text}</pre>}
+</div>
+)}
+{attemptReveal&&<button style={S.editbtn} onClick={()=>{setAttemptPick(null);setAttemptReveal(false);setExplanation(null)}}>Retry</button>}
 <button style={S.editbtn} onClick={()=>setAttempting(null)}>← Back</button>
 </div>
 ):(
@@ -411,11 +485,12 @@ return (
 </section>
 )}
 
+{/* Settings modal */}
 {showSettings&&<div style={S.modal}><div style={S.box}>
 <button style={S.close} onClick={()=>setShowSettings(false)}>×</button>
 <h2>AI Settings</h2><p>Enter your Sarvam endpoint, key and model.</p>
 <label>API Link<input value={settings.apiUrl} onChange={e=>setSettings({...settings,apiUrl:e.target.value})} placeholder="https://…/chat/completions"/></label>
-<label>API Key<input type="password" value={settings.apiKey} onChange={e=>setSettings({...settings,apiKey:e.target.value})}/></label>
+<label>API key<input type="password" value={settings.apiKey} onChange={e=>setSettings({...settings,apiKey:e.target.value})}/></label>
 <label>Model<input value={settings.model} onChange={e=>setSettings({...settings,model:e.target.value})}/></label>
 <button style={S.primary} onClick={save}>Save</button>
 </div></div>}
@@ -434,6 +509,9 @@ heroo:{display:"grid",gridTemplateColumns:"1fr 220px",gap:30,alignItems:"center"
 stat:{background:"#fff",padding:25,borderRadius:16,display:"grid"},
 dashHero:{display:"grid",gridTemplateColumns:"1fr 260px",gap:30,alignItems:"center",marginBottom:20,background:"#fff",padding:24,borderRadius:16,border:"1px solid #e2e7ef"},
 dashStat:{display:"flex",flexDirection:"column",alignItems:"center",gap:4,textAlign:"center"},
+dashToolbar:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16,alignItems:"center"},
+dashSelect:{padding:8,border:"1px solid #ccd4df",borderRadius:8,fontSize:13,background:"#fff"},
+dashBtn:{border:"1px solid #ccd4df",background:"#fff",padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:500},
 panel:{background:"#fff",border:"1px solid #e2e7ef",borderRadius:18,padding:16},
 textarea:{width:"100%",minHeight:430,padding:18,border:"1px solid #cbd3df",borderRadius:12,resize:"vertical",fontFamily:"monospace",fontSize:14,lineHeight:1.55,boxSizing:"border-box"},
 textbar:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginTop:12},
@@ -463,6 +541,8 @@ dangerbtn:{border:0,background:"#c33",color:"#fff",padding:"8px 14px",borderRadi
 editbtn:{border:0,background:"none",color:"#172033",cursor:"pointer",fontSize:12,textDecoration:"underline",padding:0,marginRight:8},
 neutral:{background:"#f6f8fa",border:"2px solid #99a3b1"},
 review:{margin:"6px 0",color:"#5b6471"},
+explainBox:{background:"#f0f4ff",border:"1px solid #c5d5f0",borderRadius:12,padding:16,marginTop:10,fontSize:14,lineHeight:1.6,color:"#1a2a4a"},
+preWrap:{whiteSpace:"pre-wrap",wordWrap:"break-word",margin:0,fontFamily:"inherit",fontSize:14},
 modal:{position:"fixed",inset:0,background:"#0008",display:"grid",placeItems:"center",padding:20},
 box:{background:"#fff",borderRadius:18,padding:28,width:"min(560px,100%)"},
 close:{float:"right",border:0,background:"none",fontSize:28,cursor:"pointer"},
