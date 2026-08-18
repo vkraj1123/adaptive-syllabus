@@ -1,8 +1,7 @@
 "use client";
 import {useEffect,useState} from "react";
 
-const TREE=[
-{s:"Indian Polity & Constitution",topics:[
+const TREE=[{s:"Indian Polity & Constitution",topics:[
  {t:"Constitutional Framework",sub:["Basic Structure","Preamble","Fundamental Rights","DPSP","Fundamental Duties","Amendments"]},
  {t:"Union Executive",sub:["President","Vice President","Prime Minister","Council of Ministers","Attorney General"]},
  {t:"Parliament",sub:["Lok Sabha","Rajya Sabha","Legislative Process","Parliamentary Committees","Anti-Defection"]},
@@ -26,7 +25,7 @@ const TREE=[
 ]},
 {s:"Indian Geography",topics:[
  {t:"Physical Geography",sub:["Physiography","Drainage System","Climate","Soils","Natural Vegetation"]},
- {t:"Economic Geography",sub:["Agriculture","Minerals","Industries","Transport","Energy"]},
+ {t:"Economic Geography",sub:["Agricultulture","Minerals","Industries","Transport","Energy"]},
  {t:"Human Geography",sub:["Population","Settlements","Migration","Literacy"]},
 ]},
 {s:"Rajasthan Geography",topics:[
@@ -49,7 +48,7 @@ const TREE=[
  {t:"Physical Sciences",sub:["Physics Basics","Chemistry Basics","Space Technology","Nuclear Science"]},
  {t:"Life Sciences",sub:["Biology Basics","Human Health","Biotechnology","Diseases & Vaccines"]},
  {t:"IT & Digital",sub:["Digital India","AI & ML","Cybersecurity","E-Governance"]},
- {t:"Defence & Space",sub:["ISRO Missions","DRDO","Defence Systems","Nuclear Program"]},
+ {t:"Defense & Space",sub:["ISRO Missions","DRDO","Defense Systems","Nuclear Program"]},
 ]},
 {s:"Environment & Ecology",topics:[
  {t:"Ecology",sub:["Ecosystems","Biodiversity","Food Chains","Conservation"]},
@@ -61,7 +60,7 @@ const TREE=[
  {t:"National Affairs",sub:["Government Schemes","Policy Changes","Judgments","Elections"]},
  {t:"International Affairs",sub:["Foreign Policy","Treaties","UN & Global Bodies","Geopolitics"]},
  {t:"Rajasthan Affairs",sub:["State Policies","Schemes","Appointments","Key Events"]},
- {t:"Sports & Awards",sub:["Sports Events","Awards & Honours","Books & Authors","Obituaries"]},
+ {t:"Sports & Awards",sub:["Sports Events","Awards & Honors","Books & Authors","Obituaries"]},
 ]},
 {s:"Reasoning & Mental Ability",topics:[
  {t:"Verbal Reasoning",sub:["Analogy","Classification","Series","Coding-Decoding","Blood Relations"]},
@@ -80,7 +79,7 @@ const TREE=[
  {t:"Aptitude",sub:["Emotional Intelligence","Attitude","Leadership","Decision Making"]},
 ]},
 {s:"International Relations",topics:[
- {t:"India's Foreign Policy",sub:["Non-Alignment","Neighborhood Policy","Look East/Act East"]},
+ {t:"India's Foreign Policy",sub:["Non-Alignment","Neighbourhood Policy","Look East/Act East"]},
  {t:"Major Powers",sub:["India-US","India-Russia","India-China","India-EU"]},
  {t:"Multilateral",sub:["UNO","SAARC","BRICS","WTO","G20"]},
 ]},
@@ -115,7 +114,8 @@ const dynamicTree=(()=>{const map={};q.forEach(x=>{if(!x.subject)return;if(!map[
 useEffect(()=>{try{
   const s=localStorage.getItem("adaptive-settings"),b=localStorage.getItem("adaptive-bank"),a=localStorage.getItem("adaptive-attempts");
   if(s)setSettings({...defaults,...JSON.parse(s)});if(b)setQ(JSON.parse(b));if(a)setAttempts(JSON.parse(a))
-}catch{}},[]);
+}catch{}}
+,[]);
 useEffect(()=>{localStorage.setItem("adaptive-bank",JSON.stringify(q))},[q]);
 useEffect(()=>{localStorage.setItem("adaptive-attempts",JSON.stringify(attempts))},[attempts]);
 
@@ -194,7 +194,7 @@ function selectWeak(){
   if(!keys.size){setMsg("No weak topics found. Attempt some questions first.");return}
   setDashSel(keys);setMsg(`Selected ${keys.size} weak topics (below 50% accuracy).`);
   /* expand all subjects that have weak topics */
-  const expSubj=new Set();dynamicTree.forEach(subj=>{subj.topics.forEach(tp=>{const tk=tagKey(subj.s,tp.t,null);const ta=acc(tk);if(ta!==null&&ta<0.5){expSubj.add(subj.s);setExpandedTopic(p=>{const n=new Set(p);n.add(tk);return n})}tp.sub.forEach(st=>{const k=tagKey(subj.s,tp.t,st);const a=acc(k);if(a!==null&&a<0.5){expSubj.add(subj.s);setExpandedTopic(p=>{const n=new Set(p);n.add(tk);return n})}})})});
+  const expSubj=new Set();dynamicTree.forEach(subj=>{subj.topics.forEach(tp=>{const tk=tagKey(subj.s,tp.t,null);const ta=acc(tk);if(ta!==null&&ta<0.5){expSubj.add(subj.s);setExpandedTopic(p=>{const n=new Set(p);n.add(tk);return n})}tp.sub.forEach(st=>{const k=tagKey(subj.s,tp.t,st);const a=acc(k);if(a!==null&&a<0.5){expSubj.add(subj.s);setExpandedTopic(p=>{const n=new Set(p);n.add(k);return n})}})})});
   setExpandedSubj(new Set([...expandedSubj,...expSubj]));
 }
 function selectAttempted(){
@@ -272,6 +272,10 @@ function manualLabel(id,field,val){setQ(q.map(x=>x.id===id?{...x,[field]:val}:x)
 function editQ(id,field,val){setQ(q.map(x=>x.id===id?{...x,[field]:val}:x))}
 function editOption(id,idx,val){setQ(q.map(x=>{if(x.id!==id)return x;const opts=[...(x.options||[])];opts[idx]=val;return{...x,options:opts}}))}
 function deleteQ(id){setQ(q.filter(x=>x.id!==id));if(editing===id)setEditing(null);if(attempting===id)setAttempting(null)}
+function deleteSelected(){if(!selected.size)return;if(!confirm(`Delete ${selected.size} selected question(s)? This cannot be undone.`))return;setQ(q.filter(x=>!selected.has(x.id)));setSelected(new Set());setMsg("Selected questions deleted.")}
+function batchLabel(field,val){if(!selected.size)return;setQ(q.map(x=>selected.has(x.id)?{...x,[field]:val}:x));setMsg(`Updated ${selected.size} questions: ${field} = ${val||"(cleared)"}`)}
+function clearSelectedTags(){if(!selected.size)return;setQ(q.map(x=>selected.has(x.id)?{...x,subject:"",topic:"",subtopic:"",difficulty:""}:x));setMsg(`Cleared tags on ${selected.size} questions.`)}
+function exportSelected(){if(!selected.size)return;const data=q.filter(x=>selected.has(x.id));const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="selected-questions.json";a.click();URL.revokeObjectURL(url);setMsg(`Exported ${selected.size} questions.`)}
 
 function startAttempt(id){setAttempting(id);setAttemptPick(null);setAttemptReveal(false);setExplanation(null)}
 function attemptAnswer(i){if(attemptReveal)return;setAttemptPick(i);setAttemptReveal(true);
@@ -282,15 +286,15 @@ const filtered=q.filter(x=>(subject==="All"||x.subject===subject)&&(x.text||"").
 function startTest(){const a=[...filtered].sort(()=>Math.random()-0.5).slice(0,20);if(a.length){setTest(a);setPos(0);setPicked(null);setScore(0);setTestExplanation(null)}}
 function answer(i){if(picked!==null)return;setPicked(i);if(test[pos].answer!=null&&test[pos].answer===i)setScore(s=>s+1)}
 function next(){
-  if(pos+1>=test.length){const graded=test.filter(q=>q.answer!=null).length;alert(`Score: ${score}/${graded}${graded<test.length?` (${test.length-graded} without answer key)`:``}`);setTest(null)}
+  if(pos+1>=test.length){const graded=test.filter(q=>q.answer!=null).length;alert(`Score: ${score}/${graded}${graded<test.length?` (${test.length-graded} without answer key)`:`}`});setTest(null)}
   else{setPos(pos+1);setPicked(null);setTestExplanation(null)}
 }
 function save(){localStorage.setItem("adaptive-settings",JSON.stringify(settings));setShowSettings(false);setMsg("Settings saved.")}
 
-/* ─── TEST MODE ─── */
+/* 📊 TEST MODE 📊 */
 if(test)return (
 <main style={S.page}><header style={S.header}>
-<button style={S.brand} onClick={()=>{setTest(null)}}>Adaptive Syllabus</button>
+<button style={S.brand} onClick={()=>setTest(null)}>Adaptive Syllabus</button>
 <nav><small>TEST {pos+1}/{test.length} · Score: {score}</small></nav>
 </header>
 <section style={S.wrap}><small>TEST {pos+1}/{test.length}</small>
@@ -309,11 +313,11 @@ if(test)return (
 </section></main>
 );
 
-/* ─── MAIN ─── */
+/* 📊 MAIN 📊 */
 return (
 <main style={S.page}>
 <header style={S.header}>
-<button style={S.brand} onClick={()=>location.reload()}>Adaptive Syllabus <small>TEXT ⇄ AI ⇉ TEST</small></button>
+<button style={S.brand} onClick={()=>location.reload()}>Adaptive Syllabus <small>TEXT ⊳ AI ⊳ TEST</small></button>
 <nav>
 <button style={view==="bank"?S.navActive:S.navBtn} onClick={()=>setView("bank")}>Bank</button>
 <button style={view==="dashboard"?S.navActive:S.navBtn} onClick={()=>setView("dashboard")}>Dashboard</button>
@@ -322,7 +326,7 @@ return (
 </header>
 
 {view==="dashboard"?(
-/* ══ DASHBOARD ══ */
+/* 📌 DASHBOARD 📌 */
 <section style={S.wrap}>
 <div style={S.dashHero}>
 <div>
@@ -339,17 +343,17 @@ return (
 {/* Dashboard toolbar */}
 <div style={S.dashToolbar}>
 <select value={dashSort} onChange={e=>setDashSort(e.target.value)} style={S.dashSelect}>
-<option value="name">Sort: A→Z</option>
+<option value="name">Sort: A↕Z</option>
 <option value="acc-asc">Sort: Accuracy ↑ (worst first)</option>
 <option value="acc-desc">Sort: Accuracy ↓ (best first)</option>
 <option value="attempts">Sort: Most attempted</option>
 </select>
-<button style={S.dashBtn} onClick={selectWeak}>⚠ Select Weak</button>
-<button style={S.dashBtn} onClick={selectAttempted}>✓ Select Attempted</button>
+<button style={S.dashBtn} onClick={selectWeak}>⚑ Select Weak</button>
+<button style={S.dashBtn} onClick={selectAttempted}>★ Select Attempted</button>
 <button style={S.dashBtn} onClick={expandAll}>⊕ Expand All</button>
 <button style={S.dashBtn} onClick={collapseAll}>⊖ Collapse All</button>
 {dashSel.size>0&&<button style={S.dashBtn} onClick={clearDashSel}>✕ Clear Selection</button>}
-<button style={{...S.dashBtn,color:"#c33"}} onClick={resetAttempts}>↻ Reset Data</button>
+<button style={{...S.dashBtn,color:"#c33"}} onClick={resetAttempts}>↺ Reset Data</button>
 </div>
 
 {msg&&<div style={S.msg}>{msg}</div>}
@@ -404,7 +408,7 @@ return (
 </div>
 </section>
 ):(
-/* ══ QUESTION BANK ══ */
+/* 📌 QUESTION BANK 📌 */
 <section style={S.wrap}>
 <div style={S.heroo}><div>
 <small>PERSONAL RAS QUESTION BANK</small>
@@ -415,7 +419,7 @@ return (
 
 <div style={S.panel}><textarea style={S.textarea} placeholder={`? First question…\n1. Option\n2. Option\n3. Option\n4. Option\n\n? Second question…`} value={text} onChange={e=>setText(e.target.value)}/>
 <div style={S.textbar}><span>{text.length.toLocaleString()} characters</span>
-<button style={S.primary} onClick={process} disabled={busy||!text.trim()}>{busy?"Processing…":"Extract questions ⇉"}</button></div></div>
+<button style={S.primary} onClick={process} disabled={busy||!text.trim()}>{busy?"Processing…":"Extract questions ⊳"}</button></div></div>
 
 <div style={S.controls}>
 <input placeholder="Search questions" value={search} onChange={e=>setSearch(e.target.value)} style={S.input}/>
@@ -425,6 +429,26 @@ return (
 {filtered.length>0&&<label style={S.chklbl}><input type="checkbox" checked={selected.size===filtered.length&&filtered.length>0} onChange={toggleAll}/> Select All</label>}
 <button style={S.primary} onClick={startTest} disabled={!filtered.length}>Test ({filtered.length})</button>
 </div>
+
+{/* Batch action bar */}
+{selected.size>0&&(
+<div style={S.batchBar}>
+<b>{selected.size} selected</b>
+<button style={S.batchBtn} onClick={tagSelected} disabled={busy}>⟳ Label</button>
+<select style={S.batchSel} value="" onChange={e=>{if(e.target.value)batchLabel("subject",e.target.value);e.target.value=""}}>
+<option value="">Set Subject…</option>
+{ALL_SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}
+</select>
+<select style={S.batchSel} value="" onChange={e=>{if(e.target.value)batchLabel("difficulty",e.target.value);e.target.value=""}}>
+<option value="">Set Difficulty…</option>
+<option>Easy</option><option>Moderate</option><option>Hard</option>
+</select>
+<button style={S.batchBtn} onClick={clearSelectedTags}>✕ Clear Tags</button>
+<button style={S.batchBtn} onClick={exportSelected}>⬇ Export</button>
+<button style={{...S.batchBtn,color:"#c33",borderColor:"#c33"}} onClick={deleteSelected}>🗑 Delete</button>
+<button style={S.batchBtn} onClick={()=>setSelected(new Set())}>✕ Deselect</button>
+</div>
+)}
 
 {msg&&<div style={S.msg}>{msg}</div>}
 
@@ -444,7 +468,7 @@ return (
 </div>
 ))}
 <button style={S.addopt} onClick={()=>editQ(x.id,"options",[...(x.options||[]),""])}>+ Add option</button>
-<div style={S.lablerow}>
+<div style={S.labelrow}>
 <select value={x.subject||""} onChange={e=>manualLabel(x.id,"subject",e.target.value)} style={S.sel2}><option value="">Subject…</option>{ALL_SUBJECTS.map(s=><option key={s}>{s}</option>)}</select>
 <input placeholder="Topic" value={x.topic||""} onChange={e=>manualLabel(x.id,"topic",e.target.value)} style={S.inp2}/>
 <input placeholder="Subtopic" value={x.subtopic||""} onChange={e=>manualLabel(x.id,"subtopic",e.target.value)} style={S.inp2}/>
@@ -499,8 +523,7 @@ return (
 <button style={S.primary} onClick={save}>Save</button>
 </div></div>}
 </main>
-)
-}
+)\n}
 
 const S={
 page:{minHeight:"100vh",background:"#f5f7fb",color:"#172033",fontFamily:"Arial,sans-serif"},
@@ -537,7 +560,7 @@ radio:{cursor:"pointer"},
 optinput:{flex:1,padding:8,border:"1px solid #ccd4df",borderRadius:6,fontSize:14},
 delopt:{border:0,background:"#fff1f1",color:"#c33",cursor:"pointer",fontSize:14,padding:"4px 8px",borderRadius:4},
 addopt:{border:"1px dashed #ccd4df",background:"#f8f9fb",cursor:"pointer",fontSize:13,padding:"6px 12px",borderRadius:6,width:"fit-content"},
-lablerow:{display:"flex",gap:8,flexWrap:"wrap",marginTop:8},
+labelrow:{display:"flex",gap:8,flexWrap:"wrap",marginTop:8},
 inp2:{padding:7,border:"1px solid #ccd4df",borderRadius:6,fontSize:13,flex:"1 1 120px"},
 sel2:{padding:7,border:"1px solid #ccd4df",borderRadius:6,fontSize:13,background:"#fff"},
 editbtns:{display:"flex",gap:8,marginTop:8},
@@ -563,4 +586,7 @@ lgRed:{background:"#fff1f1",color:"#c33",border:"1px solid #c33",padding:"2px 8p
 lgYellow:{background:"#fffdf0",color:"#b8860b",border:"1px solid #e0c040",padding:"2px 8px",borderRadius:10,fontSize:12},
 lgGreen:{background:"#effaf1",color:"#1a7a32",border:"1px solid #238636",padding:"2px 8px",borderRadius:10,fontSize:12},
 lgBlue:{background:"#e8f0ff",color:"#1a4fa0",border:"1px solid #3b6fd4",padding:"2px 8px",borderRadius:10,fontSize:12},
+batchBar:{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",background:"#fff8e1",border:"1px solid #e0c040",borderRadius:10,padding:"10px 14px",marginBottom:12},
+batchBtn:{border:"1px solid #ccd4df",background:"#fff",padding:"7px 12px",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:500},
+batchSel:{padding:"6px 8px",border:"1px solid #ccd4df",borderRadius:7,fontSize:13,background:"#fff"},
 }
