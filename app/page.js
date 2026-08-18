@@ -272,6 +272,10 @@ function manualLabel(id,field,val){setQ(q.map(x=>x.id===id?{...x,[field]:val}:x)
 function editQ(id,field,val){setQ(q.map(x=>x.id===id?{...x,[field]:val}:x))}
 function editOption(id,idx,val){setQ(q.map(x=>{if(x.id!==id)return x;const opts=[...(x.options||[])];opts[idx]=val;return{...x,options:opts}}))}
 function deleteQ(id){setQ(q.filter(x=>x.id!==id));if(editing===id)setEditing(null);if(attempting===id)setAttempting(null)}
+function deleteSelected(){if(!selected.size)return;if(!confirm(`Delete ${selected.size} selected question(s)? This cannot be undone.`))return;setQ(q.filter(x=>!selected.has(x.id)));setSelected(new Set());setMsg("Selected questions deleted.")}
+function batchLabel(field,val){if(!selected.size)return;setQ(q.map(x=>selected.has(x.id)?{...x,[field]:val}:x));setMsg(`Updated ${selected.size} questions: ${field} = ${val||"(cleared)"}`)}
+function clearSelectedTags(){if(!selected.size)return;setQ(q.map(x=>selected.has(x.id)?{...x,subject:"",topic:"",subtopic:"",difficulty:""}:x));setMsg(`Cleared tags on ${selected.size} questions.`)}
+function exportSelected(){if(!selected.size)return;const data=q.filter(x=>selected.has(x.id));const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="selected-questions.json";a.click();URL.revokeObjectURL(url);setMsg(`Exported ${selected.size} questions.`)}
 
 function startAttempt(id){setAttempting(id);setAttemptPick(null);setAttemptReveal(false);setExplanation(null)}
 function attemptAnswer(i){if(attemptReveal)return;setAttemptPick(i);setAttemptReveal(true);
@@ -425,6 +429,25 @@ return (
 {filtered.length>0&&<label style={S.chklbl}><input type="checkbox" checked={selected.size===filtered.length&&filtered.length>0} onChange={toggleAll}/> Select All</label>}
 <button style={S.primary} onClick={startTest} disabled={!filtered.length}>Test ({filtered.length})</button>
 </div>
+{/* Batch action bar */}
+{selected.size>0&&(
+<div style={S.batchBar}>
+<b>{selected.size} selected</b>
+<button style={S.batchBtn} onClick={tagSelected} disabled={busy}>⟳ Label</button>
+<select style={S.batchSel} value="" onChange={e=>{if(e.target.value)batchLabel("subject",e.target.value);e.target.value=""}}>
+<option value="">Set Subject…</option>
+{ALL_SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}
+</select>
+<select style={S.batchSel} value="" onChange={e=>{if(e.target.value)batchLabel("difficulty",e.target.value);e.target.value=""}}>
+<option value="">Set Difficulty…</option>
+<option>Easy</option><option>Moderate</option><option>Hard</option>
+</select>
+<button style={S.batchBtn} onClick={clearSelectedTags}>✕ Clear Tags</button>
+<button style={S.batchBtn} onClick={exportSelected}>⬇ Export</button>
+<button style={{...S.batchBtn,color:"#c33",borderColor:"#c33"}} onClick={deleteSelected}>🗑 Delete</button>
+<button style={S.batchBtn} onClick={()=>setSelected(new Set())}>✕ Deselect</button>
+</div>
+)}
 
 {msg&&<div style={S.msg}>{msg}</div>}
 
@@ -563,4 +586,6 @@ lgRed:{background:"#fff1f1",color:"#c33",border:"1px solid #c33",padding:"2px 8p
 lgYellow:{background:"#fffdf0",color:"#b8860b",border:"1px solid #e0c040",padding:"2px 8px",borderRadius:10,fontSize:12},
 lgGreen:{background:"#effaf1",color:"#1a7a32",border:"1px solid #238636",padding:"2px 8px",borderRadius:10,fontSize:12},
 lgBlue:{background:"#e8f0ff",color:"#1a4fa0",border:"1px solid #3b6fd4",padding:"2px 8px",borderRadius:10,fontSize:12},
-}
+batchBar:{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",background:"#fff8e1",border:"1px solid #e0c040",borderRadius:10,padding:"10px 14px",marginBottom:12},
+batchBtn:{border:"1px solid #ccd4df",background:"#fff",padding:"7px 12px",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:500},
+batchSel:{padding:"6px 8px",border:"1px solid #ccd4df",borderRadius:7,fontSize:13,background:"#fff"},
