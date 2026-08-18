@@ -109,6 +109,9 @@ const[dashSort,setDashSort]=useState("name"); /* name | acc-asc | acc-desc | att
 const[explanation,setExplanation]=useState(null); /* {text, loading} */
 const[testExplanation,setTestExplanation]=useState(null);
 
+/* Build dynamic tree from actual tagged questions in the bank */
+const dynamicTree=(()=>{const map={};q.forEach(x=>{if(!x.subject)return;if(!map[x.subject])map[x.subject]={};const tp=x.topic||"Untitled";if(!map[x.subject][tp])map[x.subject][tp]=new Set();if(x.subtopic)map[x.subject][tp].add(x.subtopic)});return Object.keys(map).sort().map(s=>({s,topics:Object.keys(map[s]).sort().map(t=>({t,sub:[...map[s][t]].sort()}))}))})();
+
 useEffect(()=>{try{
   const s=localStorage.getItem("adaptive-settings"),b=localStorage.getItem("adaptive-bank"),a=localStorage.getItem("adaptive-attempts");
   if(s)setSettings({...defaults,...JSON.parse(s)});if(b)setQ(JSON.parse(b));if(a)setAttempts(JSON.parse(a))
@@ -173,7 +176,7 @@ function toggleTopic(t){setExpandedTopic(p=>{const n=new Set(p);if(n.has(t))n.de
 /* Dashboard selection */
 function toggleDashTag(key){setDashSel(p=>{const n=new Set(p);if(n.has(key))n.delete(key);else n.add(key);return n})}
 function selectAllSubj(s){
-  const subj=TREE.find(x=>x.s===s);if(!subj)return;
+  const subj=dynamicTree.find(x=>x.s===s);if(!subj)return;
   const keys=new Set(dashSel);
   let allSelected=true;
   for(const tp of subj.topics){const tk=tagKey(s,tp.t,null);if(!keys.has(tk))allSelected=false;for(const st of tp.sub){const k=tagKey(s,tp.t,st);if(!keys.has(k))allSelected=false}}
@@ -183,7 +186,7 @@ function selectAllSubj(s){
 }
 function selectWeak(){
   const keys=new Set();
-  TREE.forEach(subj=>{subj.topics.forEach(tp=>{
+  dynamicTree.forEach(subj=>{subj.topics.forEach(tp=>{
     const tk=tagKey(subj.s,tp.t,null);const ta=acc(tk);
     if(ta!==null&&ta<0.5)keys.add(tk);
     tp.sub.forEach(st=>{const k=tagKey(subj.s,tp.t,st);const a=acc(k);if(a!==null&&a<0.5)keys.add(k)});
@@ -191,19 +194,19 @@ function selectWeak(){
   if(!keys.size){setMsg("No weak topics found. Attempt some questions first.");return}
   setDashSel(keys);setMsg(`Selected ${keys.size} weak topics (below 50% accuracy).`);
   /* expand all subjects that have weak topics */
-  const expSubj=new Set();TREE.forEach(subj=>{subj.topics.forEach(tp=>{const tk=tagKey(subj.s,tp.t,null);const ta=acc(tk);if(ta!==null&&ta<0.5){expSubj.add(subj.s);setExpandedTopic(p=>{const n=new Set(p);n.add(tk);return n})}tp.sub.forEach(st=>{const k=tagKey(subj.s,tp.t,st);const a=acc(k);if(a!==null&&a<0.5){expSubj.add(subj.s);setExpandedTopic(p=>{const n=new Set(p);n.add(tk);return n})}})})});
+  const expSubj=new Set();dynamicTree.forEach(subj=>{subj.topics.forEach(tp=>{const tk=tagKey(subj.s,tp.t,null);const ta=acc(tk);if(ta!==null&&ta<0.5){expSubj.add(subj.s);setExpandedTopic(p=>{const n=new Set(p);n.add(tk);return n})}tp.sub.forEach(st=>{const k=tagKey(subj.s,tp.t,st);const a=acc(k);if(a!==null&&a<0.5){expSubj.add(subj.s);setExpandedTopic(p=>{const n=new Set(p);n.add(tk);return n})}})})});
   setExpandedSubj(new Set([...expandedSubj,...expSubj]));
 }
 function selectAttempted(){
   const keys=new Set();
-  TREE.forEach(subj=>{subj.topics.forEach(tp=>{tp.sub.forEach(st=>{const k=tagKey(subj.s,tp.t,st);if(acc(k)!==null)keys.add(k)})})});
+  dynamicTree.forEach(subj=>{subj.topics.forEach(tp=>{tp.sub.forEach(st=>{const k=tagKey(subj.s,tp.t,st);if(acc(k)!==null)keys.add(k)})})});
   if(!keys.size){setMsg("No attempted topics found yet.");return}
   setDashSel(keys);setMsg(`Selected ${keys.size} attempted subtopics.`);
 }
 function clearDashSel(){setDashSel(new Set());setMsg("Selection cleared.")}
 function resetAttempts(){if(confirm("Reset all attempt data? This cannot be undone.")){setAttempts({});setMsg("Attempt data reset.")}}
 
-function expandAll(){setExpandedSubj(new Set(ALL_SUBJECTS));setExpandedTopic(new Set(TREE.flatMap(s=>s.topics.map(tp=>tagKey(s.s,tp.t,null)))))}
+function expandAll(){setExpandedSubj(new Set(dynamicTree.map(s=>s.s)));setExpandedTopic(new Set(dynamicTree.flatMap(s=>s.topics.map(tp=>tagKey(s.s,tp.t,null)))))}
 function collapseAll(){setExpandedSubj(new Set());setExpandedTopic(new Set())}
 
 function startDashTest(){
@@ -329,7 +332,7 @@ return (
 </div>
 <div style={S.dashStat}>
 <b style={{fontSize:32}}>{dashSel.size}</b><small>topics selected</small>
-<button style={{...S.primary,marginTop:10}} onClick={startDashTest} disabled={!dashSel.size||!q.length}>▶ Start Test ({dashSel.size?Math.min(20,q.filter(x=>{const k1=tagKey(x.subject,x.topic,x.subtopic),k2=tagKey(x.subject,x.topic,null);return dashSel.has(k1)||dashSel.has(k2)}).length,0):0} questions)</button>
+<button style={{...S.primary,marginTop:10}} onClick={startDashTest} disabled={!dashSel.size||!q.length}>▶ Start Test ({dashSel.size?Math.min(20,q.filter(x=>{const k1=tagKey(x.subject,x.topic,x.subtopic),k2=tagKey(x.subject,x.topic,null);return dashSel.has(k1)||dashSel.has(k2)}).length):0} questions)</button>
 </div>
 </div>
 
@@ -361,8 +364,9 @@ return (
 </div>
 
 {/* Tree */}
+{dynamicTree.length===0&&<div style={{...S.msg,fontSize:14}}>No tagged questions yet. Go to Bank, extract questions, and click AI Label to populate the dashboard.</div>}
 <div style={S.treeWrap}>
-{sortSubjects(TREE).map(subj=>{
+{sortSubjects(dynamicTree).map(subj=>{
   const isExp=expandedSubj.has(subj.s);
   const subjAllSel=isExp&&subj.topics.every(tp=>dashSel.has(tagKey(subj.s,tp.t,null)));
   return (
