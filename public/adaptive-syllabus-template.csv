@@ -1,0 +1,2 @@
+question_id,exam,year,question,option_a,option_b,option_c,option_d,option_e,correct_option,subject,topic,subtopic,explanation,key_fact,common_confusion,source,difficulty,question_type
+RAS-2024-001,RAS,2024,"Example question","Option A","Option B","Option C","Option D","",B,"Rajasthan History & Culture","Freedom Struggle","Praja Mandal Movement","Short explanation prepared before import.","One high-yield fact.","Common trap or distinction.","RPSC RAS 2024",moderate,MCQ
