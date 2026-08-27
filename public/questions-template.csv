@@ -1,0 +1,2 @@
+question_id,exam,stage,year,question,option_a,option_b,option_c,option_d,option_e,correct_option,node_id,subject,topic,subtopic,concept,explanation,key_fact,common_confusion,source,difficulty,question_type,expected_time_sec
+EXAMPLE-001,ras,Prelims,2026,Example question,A,B,C,D,,B,polity.federalism.centre_state.finance_commission,Indian Polity & Constitution,Federalism,Centre-State Relations,Finance Commission,Prepared externally,High-yield fact,Common trap,RPSC,moderate,MCQ,60
