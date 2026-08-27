@@ -1,0 +1,35 @@
+{
+  "exam": "RAS",
+  "stage": "Prelims",
+  "syllabus_version": "2026.1",
+  "nodes": [
+    {
+      "node_id": "polity.federalism.centre_state_relations",
+      "level": "concept",
+      "title": "Centre-State Relations",
+      "parent_id": "polity.federalism",
+      "weight": 1,
+      "description": "Concept-level syllabus item",
+      "children": []
+    }
+  ],
+  "questions": [
+    {
+      "question_id": "RAS-2026-001",
+      "exam": "RAS",
+      "stage": "Prelims",
+      "year": 2026,
+      "node_id": "polity.federalism.centre_state_relations",
+      "question": "Example question",
+      "options": ["A", "B", "C", "D"],
+      "correct_option": "B",
+      "explanation": "Prepared externally before import.",
+      "key_fact": "High-yield fact.",
+      "common_confusion": "Common trap.",
+      "difficulty": "moderate",
+      "expected_time_ms": 60000,
+      "source": "RPSC",
+      "question_type": "MCQ"
+    }
+  ]
+}
