@@ -1,39 +1,9 @@
-export const IMPORT_FIELDS = [
-  "question_id","exam","year","question","option_a","option_b","option_c","option_d","option_e","correct_option",
-  "subject","topic","subtopic","explanation","key_fact","common_confusion","source","difficulty","question_type"
+export const IMPORT_FIELDS=[
+ "question_id","exam","stage","year","question","option_a","option_b","option_c","option_d","option_e","correct_option",
+ "node_id","subject","topic","subtopic","concept","explanation","key_fact","common_confusion","source","difficulty","question_type","expected_time_sec"
 ];
-
-export const IMPORT_EXAMPLE = {
-  question_id:"RAS-2024-001", exam:"RAS", year:2024,
-  question:"Example question text", option_a:"A", option_b:"B", option_c:"C", option_d:"D", option_e:"",
-  correct_option:"B", subject:"Rajasthan History & Culture", topic:"Freedom Struggle", subtopic:"Praja Mandal Movement",
-  explanation:"Short explanation prepared before import.", key_fact:"One high-yield fact.", common_confusion:"Common trap or distinction.",
-  source:"RPSC RAS 2024", difficulty:"moderate", question_type:"MCQ"
-};
-
-export function normalizeImportedQuestion(raw, index = 0) {
-  const x = raw || {};
-  const options = [x.option_a,x.option_b,x.option_c,x.option_d,x.option_e].filter(v => String(v ?? "").trim() !== "").map(v => String(v).trim());
-  const answerRaw = String(x.correct_option ?? "").trim().toUpperCase();
-  const answer = /^[A-E]$/.test(answerRaw) ? answerRaw.charCodeAt(0)-65 : /^\d$/.test(answerRaw) ? Number(answerRaw)-1 : null;
-  return {
-    id: String(x.question_id || `IMPORT-${Date.now()}-${index+1}`),
-    exam: String(x.exam || "").trim(), year: x.year || "", text: String(x.question || x.text || "").trim(), options,
-    answer: answer != null && answer >= 0 && answer < options.length ? answer : null,
-    subject: String(x.subject || "").trim(), topic: String(x.topic || "").trim(), subtopic: String(x.subtopic || "").trim(),
-    explanation: String(x.explanation || "").trim(), keyFact: String(x.key_fact || "").trim(), commonConfusion: String(x.common_confusion || "").trim(),
-    source: String(x.source || "").trim(), difficulty: String(x.difficulty || "").trim().toLowerCase(), questionType: String(x.question_type || "MCQ").trim(),
-    answerSource: answer != null ? "imported" : "none", importedAt: new Date().toISOString()
-  };
-}
-
-export function validateImportedQuestion(q, validTagSet) {
-  const errors = [];
-  if (!q.text) errors.push("Missing question");
-  if (q.options.length < 2) errors.push("At least 2 options required");
-  if (q.answer == null) errors.push("Missing/invalid correct_option");
-  if (!q.subject || !q.topic) errors.push("Missing subject/topic");
-  const exact = q.subtopic ? `${q.subject}|${q.topic}|${q.subtopic}` : `${q.subject}|${q.topic}`;
-  if (q.subject && q.topic && !validTagSet.has(exact)) errors.push("Tag is not in the master syllabus");
-  return errors;
-}
+export const SYLLABUS_FIELDS=["exam","node_id","parent_id","level","subject","topic","subtopic","concept","title","description","weight","children_json"];
+export const IMPORT_EXAMPLE={question_id:"RAS-2024-001",exam:"ras",stage:"Prelims",year:2024,question:"Example question",option_a:"A",option_b:"B",option_c:"C",option_d:"D",option_e:"",correct_option:"B",node_id:"polity.federalism.centre_state",subject:"Indian Polity & Constitution",topic:"Federalism",subtopic:"Centre-State Relations",concept:"Legislative relations",explanation:"Prepared before import.",key_fact:"High-yield fact.",common_confusion:"Common trap.",source:"RPSC RAS 2024",difficulty:"moderate",question_type:"MCQ",expected_time_sec:60};
+export function normalizeImportedQuestion(raw,index=0){const x=raw||{},options=[x.option_a,x.option_b,x.option_c,x.option_d,x.option_e].filter(v=>String(v??"").trim()!=="").map(v=>String(v).trim()),a=String(x.correct_option??"").trim().toUpperCase(),answer=/^[A-E]$/.test(a)?a.charCodeAt(0)-65:/^\d$/.test(a)?Number(a)-1:null;return{id:String(x.question_id||`IMPORT-${Date.now()}-${index+1}`),exam:String(x.exam||"custom").trim(),stage:String(x.stage||"").trim(),year:x.year||"",text:String(x.question||x.text||"").trim(),options,answer:answer!=null&&answer>=0&&answer<options.length?answer:null,nodeId:String(x.node_id||x.nodeId||"").trim(),subject:String(x.subject||"").trim(),topic:String(x.topic||"").trim(),subtopic:String(x.subtopic||"").trim(),concept:String(x.concept||"").trim(),explanation:String(x.explanation||"").trim(),keyFact:String(x.key_fact||x.keyFact||"").trim(),commonConfusion:String(x.common_confusion||x.commonConfusion||"").trim(),source:String(x.source||"").trim(),difficulty:String(x.difficulty||"").trim().toLowerCase(),questionType:String(x.question_type||x.questionType||"MCQ").trim(),expectedTimeSec:Number(x.expected_time_sec||x.expectedTimeSec||60),answerSource:answer!=null?"imported":"none",importedAt:new Date().toISOString()};}
+export function validateImportedQuestion(q,validTagSet){const errors=[];if(!q.text)errors.push("Missing question");if(q.options.length<2)errors.push("At least 2 options required");if(q.answer==null)errors.push("Missing/invalid correct_option");if(!q.exam)errors.push("Missing exam");if(!q.nodeId)errors.push("Missing node_id");if(!q.subject||!q.topic)errors.push("Missing subject/topic");const exact=q.subtopic?`${q.subject}|${q.topic}|${q.subtopic}`:`${q.subject}|${q.topic}`;if(q.subject&&q.topic&&validTagSet&&!validTagSet.has(exact))errors.push("Legacy tag is not in the active syllabus");return errors;}
+export function normalizeSyllabusRow(raw,index=0){const x=raw||{};return{exam:String(x.exam||"custom").trim(),nodeId:String(x.node_id||x.nodeId||`node-${index+1}`).trim(),parentId:String(x.parent_id||x.parentId||"").trim(),level:String(x.level||"concept").trim().toLowerCase(),subject:String(x.subject||"").trim(),topic:String(x.topic||"").trim(),subtopic:String(x.subtopic||"").trim(),concept:String(x.concept||"").trim(),title:String(x.title||x.concept||x.subtopic||x.topic||x.subject||"").trim(),description:String(x.description||"").trim(),weight:Number(x.weight??1),childrenJson:String(x.children_json||"").trim()};}
