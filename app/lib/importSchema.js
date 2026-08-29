@@ -28,8 +28,7 @@ export function validateImportedQuestion(q,validTagSet,validNodeSet){
  if(q.answer==null)errors.push("Missing/invalid correct_option");
  if(!q.exam)errors.push("Missing exam");
  if(!q.nodeId)errors.push("Missing node_id");
- if(q.nodeId&&validNodeSet&&!validNodeSet.has(q.nodeId)&&q.exam!=="custom")errors.push("node_id is not in the active syllabus");
- if(q.subject&&q.topic&&validTagSet){const exact=q.subtopic?`${q.subject}|${q.topic}|${q.subtopic}`:`${q.subject}|${q.topic}`;if(validTagSet.size&&!validTagSet.has(exact))errors.push("Subject/topic does not match the active syllabus");}
+ if(q.nodeId&&validNodeSet&&!validNodeSet.has(q.nodeId)&&q.exam!=="custom")errors.push("node_id is not in the predefined syllabus");
  if(q.nodeId&&q.exam!=="custom"&&!q.nodeId.startsWith(`${q.exam}.`))errors.push("node_id does not belong to selected exam");
  return errors;
 }
