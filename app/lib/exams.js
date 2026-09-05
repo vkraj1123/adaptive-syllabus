@@ -5,6 +5,7 @@ export const EXAM_PROFILES = {
   ssc_cgl: { id:"ssc_cgl", name:"SSC Combined Graduate Level", shortName:"SSC CGL", defaultLanguage:"en", stages:["Tier I","Tier II"], scoring:{negativeMarking:true}, syllabusMode:"concept" },
   banking: { id:"banking", name:"Banking / IBPS-SBI", shortName:"Banking", defaultLanguage:"en", stages:["Prelims","Mains"], scoring:{negativeMarking:true}, syllabusMode:"concept" },
   police: { id:"police", name:"State Police / SI", shortName:"Police SI", defaultLanguage:"en", stages:["Written","Interview"], scoring:{negativeMarking:true}, syllabusMode:"concept" },
+  neet: { id:"neet", name:"National Eligibility cum Entrance Test (UG)", shortName:"NEET UG", defaultLanguage:"bilingual", languages:["en","hi"], stages:["UG"], scoring:{negativeMarking:true}, syllabusMode:"concept" },
   custom: { id:"custom", name:"Custom Examination", shortName:"Custom", defaultLanguage:"en", stages:["Exam"], scoring:{negativeMarking:false}, syllabusMode:"concept" }
 };
 
