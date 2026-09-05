@@ -1,5 +1,6 @@
 -- Adaptive Syllabus cloud schema
 -- Multi-exam student model: one account can prepare for many exams.
+-- Shared cloud question bank: one question source for all students.
 -- The first cloud account after a clean reset becomes admin.
 
 create table if not exists public.profiles (
@@ -27,14 +28,58 @@ create table if not exists public.question_progress (user_id uuid not null refer
 create index if not exists attempts_user_exam_idx on public.attempts(user_id,exam,created_at desc);
 create index if not exists attempts_exam_idx on public.attempts(exam,created_at desc);
 
+create table if not exists public.questions (
+  id text primary key,
+  exam text not null,
+  stage text,
+  year integer,
+  question text not null,
+  question_hi text,
+  options jsonb not null default '{}'::jsonb,
+  options_hi jsonb not null default '{}'::jsonb,
+  correct_option text not null check(correct_option in ('A','B','C','D','E')),
+  node_id text,
+  subject text,
+  topic text,
+  subtopic text,
+  concept text,
+  explanation_short text,
+  explanation_detailed text,
+  explanation_short_hi text,
+  explanation_detailed_hi text,
+  why_correct text,
+  why_others_wrong jsonb,
+  key_fact text,
+  key_fact_hi text,
+  common_confusion text,
+  source text,
+  difficulty text,
+  question_type text,
+  pyq boolean default false,
+  verification_status text,
+  expected_time_sec integer,
+  raw_data jsonb,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists questions_exam_idx on public.questions(exam);
+create index if not exists questions_node_idx on public.questions(exam,node_id);
+create index if not exists questions_year_idx on public.questions(exam,year);
+
 alter table public.profiles enable row level security;
 alter table public.student_exams enable row level security;
 alter table public.attempts enable row level security;
 alter table public.question_progress enable row level security;
+alter table public.questions enable row level security;
 
 create or replace function public.is_admin() returns boolean language sql stable security definer set search_path=public as $$ select exists(select 1 from public.profiles where id=auth.uid() and role='admin'); $$;
 revoke all on function public.is_admin() from public;
 grant execute on function public.is_admin() to authenticated;
+
+create or replace function public.is_staff() returns boolean language sql stable security definer set search_path=public as $$ select exists(select 1 from public.profiles where id=auth.uid() and role in ('admin','mentor')); $$;
+revoke all on function public.is_staff() from public;
+grant execute on function public.is_staff() to authenticated;
 
 drop policy if exists "profiles self select" on public.profiles;
 drop policy if exists "profiles self insert" on public.profiles;
@@ -51,6 +96,10 @@ drop policy if exists "progress self select" on public.question_progress;
 drop policy if exists "progress self insert" on public.question_progress;
 drop policy if exists "progress self update" on public.question_progress;
 drop policy if exists "admins read progress" on public.question_progress;
+drop policy if exists "questions authenticated select" on public.questions;
+drop policy if exists "questions staff insert" on public.questions;
+drop policy if exists "questions staff update" on public.questions;
+drop policy if exists "questions admins delete" on public.questions;
 
 create policy "profiles self select" on public.profiles for select using (auth.uid()=id or public.is_admin());
 create policy "profiles self insert" on public.profiles for insert with check (auth.uid()=id);
@@ -63,8 +112,11 @@ create policy "attempts self insert" on public.attempts for insert with check (a
 create policy "progress self select" on public.question_progress for select using (auth.uid()=user_id or public.is_admin());
 create policy "progress self insert" on public.question_progress for insert with check (auth.uid()=user_id);
 create policy "progress self update" on public.question_progress for update using (auth.uid()=user_id);
+create policy "questions authenticated select" on public.questions for select to authenticated using(true);
+create policy "questions staff insert" on public.questions for insert to authenticated with check(public.is_staff());
+create policy "questions staff update" on public.questions for update to authenticated using(public.is_staff()) with check(public.is_staff());
+create policy "questions admins delete" on public.questions for delete to authenticated using(public.is_admin());
 
--- First profile created after a clean reset becomes admin.
 create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path=public as $$
 declare first_account boolean; initial_exam text;
 begin
@@ -80,6 +132,4 @@ end; $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
 
--- ONE-TIME DEVELOPMENT RESET: uncomment these only when intentionally starting clean.
--- delete from auth.users;
--- delete from public.profiles;
+insert into public.student_exams(user_id,exam) select id,coalesce(active_exam,exam) from public.profiles on conflict do nothing;
