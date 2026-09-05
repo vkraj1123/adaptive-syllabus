@@ -9,8 +9,10 @@ const links = [
   ["/", "Dashboard"],
   ["/syllabus", "Syllabus"],
   ["/practice", "Practice"],
+  ["/live-test", "Live Tests"],
   ["/question-bank", "Question Bank"],
   ["/question-import", "AI Import"],
+  ["/test-creator", "Test Creator"],
   ["/analytics", "Analytics"],
   ["/profile", "Profile"],
 ];
