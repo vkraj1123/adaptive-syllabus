@@ -9,11 +9,17 @@ async function getAdmin(request){
   const auth=request.headers.get("authorization")||"";
   const token=auth.startsWith("Bearer ")?auth.slice(7):"";
   if(!token)return {error:NextResponse.json({error:"Authentication required."},{status:401})};
+
   const publicClient=createClient(url,anon,{auth:{autoRefreshToken:false,persistSession:false}});
   const {data:{user},error}=await publicClient.auth.getUser(token);
   if(error||!user)return {error:NextResponse.json({error:"Invalid or expired session."},{status:401})};
-  const {data:profile,error:profileError}=await publicClient.from("profiles").select("role").eq("id",user.id).single();
-  if(profileError||profile?.role!=="admin")return {error:NextResponse.json({error:"Admin access required."},{status:403})};
+
+  // Verify the role with the service-role client so this check is not affected
+  // by profiles RLS/policy evaluation. The service key is server-only.
+  const serviceClient=createClient(url,service,{auth:{autoRefreshToken:false,persistSession:false}});
+  const {data:profile,error:profileError}=await serviceClient.from("profiles").select("role").eq("id",user.id).maybeSingle();
+  if(profileError)return {error:NextResponse.json({error:profileError.message},{status:500})};
+  if(profile?.role!=="admin")return {error:NextResponse.json({error:"Admin access required."},{status:403})};
   return {user,url,service};
 }
 
