@@ -9,7 +9,6 @@ create table if not exists public.profiles (
   name text not null,
   dob date,
   exam text not null,
-  active_exam text,
   role text not null default 'student',
   created_at timestamptz not null default now()
 );
@@ -123,8 +122,8 @@ begin
   perform pg_advisory_xact_lock(918273645);
   select not exists(select 1 from public.profiles) into first_account;
   initial_exam:=coalesce(new.raw_user_meta_data->>'exam','ras');
-  insert into public.profiles(id,user_id,name,dob,exam,active_exam,role)
-  values(new.id,coalesce(new.raw_user_meta_data->>'user_id',split_part(new.email,'@',1)),coalesce(new.raw_user_meta_data->>'name','Student'),nullif(new.raw_user_meta_data->>'dob','')::date,initial_exam,initial_exam,case when first_account then 'admin' else 'student' end)
+  insert into public.profiles(id,user_id,name,dob,exam,role)
+  values(new.id,coalesce(new.raw_user_meta_data->>'user_id',split_part(new.email,'@',1)),coalesce(new.raw_user_meta_data->>'name','Student'),nullif(new.raw_user_meta_data->>'dob','')::date,initial_exam,case when first_account then 'admin' else 'student' end)
   on conflict(id) do nothing;
   insert into public.student_exams(user_id,exam) values(new.id,initial_exam) on conflict do nothing;
   return new;
@@ -132,4 +131,4 @@ end; $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
 
-insert into public.student_exams(user_id,exam) select id,coalesce(active_exam,exam) from public.profiles on conflict do nothing;
+insert into public.student_exams(user_id,exam) select id,exam from public.profiles on conflict do nothing;
