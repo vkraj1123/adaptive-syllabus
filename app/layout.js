@@ -12,6 +12,7 @@ const links = [
   ["/question-bank", "Question Bank"],
   ["/question-import", "AI Import"],
   ["/analytics", "Analytics"],
+  ["/profile", "Profile"],
 ];
 
 export default function RootLayout({ children }) {
