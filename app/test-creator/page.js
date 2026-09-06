@@ -13,11 +13,9 @@ const card={background:"#fff",border:"1px solid #dfe5ed",borderRadius:14,padding
 const norm=v=>String(v??"").trim().toLowerCase().replace(/[–—]/g,"-").replace(/\s+/g," ");
 function localValue(date){const d=new Date(date);const p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}
 function questionMatchesNode(q,node){
-  const qNode=norm(q.node_id||q.nodeId);
-  const id=norm(node.nodeId);
+  const qNode=norm(q.node_id||q.nodeId); const id=norm(node.nodeId);
   if(id&&(qNode===id||qNode.startsWith(id+".")))return true;
-  const title=norm(node.title);
-  if(!title)return false;
+  const title=norm(node.title); if(!title)return false;
   if(node.level==="subject"&&norm(q.subject)===title)return true;
   if(node.level==="topic"&&norm(q.topic)===title)return true;
   if(node.level==="concept"&&(norm(q.concept)===title||norm(q.subtopic)===title))return true;
@@ -44,7 +42,28 @@ export default function TestCreator(){
  function toggle(id){setSelected(s=>{const n=new Set(s);const group=descendants(id).map(x=>x.nodeId);const all=group.length>0&&group.every(x=>n.has(x));group.forEach(x=>all?n.delete(x):n.add(x));return n;});}
  function selectedForNode(id){const group=descendants(id).map(x=>x.nodeId);return group.length>0&&group.every(x=>selected.has(x));}
  function nodeTree(parent="",depth=0){return nodes.filter(n=>n.parentId===parent).map(n=><div key={n.nodeId}><label style={{display:"flex",gap:8,alignItems:"center",padding:"7px 4px",paddingLeft:depth*20,borderBottom:"1px solid #edf0f4"}}><input type="checkbox" checked={selectedForNode(n.nodeId)} onChange={()=>toggle(n.nodeId)}/><span style={{fontWeight:n.level==="subject"?700:n.level==="topic"?600:400}}>{n.title}</span><small style={{marginLeft:"auto",color:"#667085"}}>{n.level}</small></label>{nodeTree(n.nodeId,depth+1)}</div>);}
- async function publish(){setMessage("");if(!profile||profile.role!=="admin")return;if(!title.trim()){setMessage("Give the live test a title.");return;}if(!selectedQuestions.length){setMessage("Select at least one syllabus topic or concept containing questions.");return;}const st=new Date(start),en=new Date(end);if(Number.isNaN(st.getTime())||Number.isNaN(en.getTime())||en<=st){setMessage("End time must be after start time.");return;}setBusy(true);try{const {data:test,error}=await supabase.from("tests").insert({exam,title:title.trim(),description:description.trim()||null,start_at:st.toISOString(),end_at:en.toISOString(),duration_sec:Math.max(60,Number(duration)*60),status:"published",created_by:profile.id,published_at:new Date().toISOString()}).select("*").single();if(error)throw error;let pool=[...selectedQuestions];for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}if(Number(limit)>0)pool=pool.slice(0,Number(limit));const rows=pool.map((q,i)=>({test_id:test.id,question_id:q.id,order_no:i+1}));const {error:qe}=await supabase.from("test_questions").insert(rows);if(qe){await supabase.from("tests").delete().eq("id",test.id);throw qe;}setMessage(`LIVE TEST CREATED: ${title.trim()} • ${pool.length} questions • ${start.replace("T"," ")} to ${end.replace("T"," ")}`);setSelected(new Set());}catch(e){setMessage(e?.message||"Unable to publish live test.");}finally{setBusy(false)}}
+ async function publish(){
+  setMessage("");
+  if(!profile||profile.role!=="admin")return;
+  if(!title.trim()){setMessage("Give the live test a title.");return;}
+  if(!selectedQuestions.length){setMessage("Select at least one syllabus topic or concept containing questions.");return;}
+  const st=new Date(start),en=new Date(end);
+  if(Number.isNaN(st.getTime())||Number.isNaN(en.getTime())||en<=st){setMessage("End time must be after start time.");return;}
+  setBusy(true);
+  try{
+   const {data:{session}}=await supabase.auth.getSession();
+   if(!session?.access_token)throw new Error("Please sign in again.");
+   let pool=[...selectedQuestions];
+   for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+   if(Number(limit)>0)pool=pool.slice(0,Number(limit));
+   const res=await fetch("/api/admin/live-tests",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({exam,title:title.trim(),description:description.trim(),startAt:st.toISOString(),endAt:en.toISOString(),durationSec:Math.max(60,Number(duration)*60),questionIds:pool.map(q=>q.id)})});
+   const body=await res.json().catch(()=>({}));
+   if(!res.ok)throw new Error(body.error||"Unable to publish live test.");
+   setMessage(`LIVE TEST CREATED: ${title.trim()} • ${body.questionCount||pool.length} questions • ${start.replace("T"," ")} to ${end.replace("T"," ")}`);
+   setSelected(new Set());
+  }catch(e){setMessage(e?.message||"Unable to publish live test.");}
+  finally{setBusy(false);}
+ }
  if(!profile)return <main style={{padding:24,fontFamily:"system-ui"}}>Loading Test Creator…</main>;
  return <main style={{minHeight:"100vh",background:"#f6f8fb",color:"#172033",fontFamily:"system-ui,-apple-system,sans-serif"}}><div style={{maxWidth:1150,margin:"0 auto",padding:24}}><a href="/admin">← Admin Control</a><h1>Live Test Creator</h1><p style={{color:"#58657a"}}>Select an exam syllabus topic or concept. The test becomes available only during the period you set; after it ends, students see their result and rank.</p>{message&&<div style={{...card,background:"#f0f7ff"}}>{message}</div>}
  <section style={card}><h2>1. Test</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12}}><label>Exam<select value={exam} onChange={e=>setExam(e.target.value)} style={{display:"block",width:"100%",padding:10,marginTop:5}}>{Object.values(EXAM_PROFILES).filter(e=>e.id!=="custom").map(e=><option key={e.id} value={e.id}>{e.shortName}</option>)}</select></label><label>Test title<input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. RAS Polity Weekly Live Test" style={{display:"block",width:"100%",boxSizing:"border-box",padding:10,marginTop:5}}/></label><label>Duration (minutes)<input type="number" min="1" value={duration} onChange={e=>setDuration(e.target.value)} style={{display:"block",width:"100%",boxSizing:"border-box",padding:10,marginTop:5}}/></label><label>Question limit (0 = all selected)<input type="number" min="0" value={limit} onChange={e=>setLimit(e.target.value)} style={{display:"block",width:"100%",boxSizing:"border-box",padding:10,marginTop:5}}/></label></div><label style={{display:"block",marginTop:12}}>Description<input value={description} onChange={e=>setDescription(e.target.value)} placeholder="Optional instructions" style={{display:"block",width:"100%",boxSizing:"border-box",padding:10,marginTop:5}}/></label></section>
