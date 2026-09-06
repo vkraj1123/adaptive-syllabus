@@ -5,7 +5,7 @@ export const cloudEnabled=Boolean(url&&key);
 export const supabase=cloudEnabled?createClient(url,key):null;
 export function cloudUserEmail(userId){return `${String(userId).trim().toLowerCase().replace(/[^a-z0-9._-]/g,"-")}@adaptive-syllabus.local`;}
 const PROFILE_FIELDS="id,user_id,name,dob,exam,role,created_at";
-export async function cloudSignUp({userId,password,name,dob,exams}){if(!supabase)throw new Error("Cloud mode is not configured");const selected=Array.isArray(exams)&&exams.length?exams:["ras"];const {data,error}=await supabase.auth.signUp({email:cloudUserEmail(userId),password,options:{data:{user_id:userId,name,dob,exam:selected[0]}}});if(error)throw error;return data;}
+export async function cloudSignUp({userId,password,name,dob,exams,exam}){if(!supabase)throw new Error("Cloud mode is not configured");const selected=Array.isArray(exams)&&exams.length?exams:(exam?[exam]:["ras"]);const initialExam=selected[0];const {data,error}=await supabase.auth.signUp({email:cloudUserEmail(userId),password,options:{data:{user_id:userId,name,dob,exam:initialExam}}});if(error)throw error;return data;}
 export async function cloudSignIn(userId,password){if(!supabase)throw new Error("Cloud mode is not configured");const {data,error}=await supabase.auth.signInWithPassword({email:cloudUserEmail(userId),password});if(error)throw error;return data;}
 export async function cloudSignOut(){if(supabase)await supabase.auth.signOut();}
 export async function getCloudProfile(){if(!supabase)return null;const {data:{user}}=await supabase.auth.getUser();if(!user)return null;const {data,error}=await supabase.from("profiles").select(PROFILE_FIELDS).eq("id",user.id).single();if(error)throw error;return data;}
