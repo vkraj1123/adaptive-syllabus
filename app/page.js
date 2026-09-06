@@ -38,7 +38,7 @@ export default function Home(){
      if(!loginId.trim()||!loginPw){setMessage("Please enter your User ID and password.");return}
      if(signup){
        if(!name.trim()||!dob||!chosenExam){setMessage("Please complete name, date of birth and exam.");return}
-       const data=await cloudSignUp({userId:loginId.trim(),password:loginPw,name:name.trim(),dob,exam:chosenExam});
+       const data=await cloudSignUp({userId:loginId.trim(),password:loginPw,name:name.trim(),dob,exams:[chosenExam]});
        if(!data?.session){setMessage("Account created, but no session was returned. Please try signing in.");return}
        const profile=await getCloudProfile();
        const u=profile||{id:loginId.trim(),name:name.trim(),dob,exam:chosenExam,role:"student"};
